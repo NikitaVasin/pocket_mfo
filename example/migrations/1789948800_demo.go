@@ -1,10 +1,10 @@
 package migrations
 
 import (
+	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/migrations"
 	"github.com/pocketbase/pocketbase/tools/types"
-	"pocket_mfo/plugins/polymorphicrelation"
 )
 
 func init() {

@@ -1,0 +1,7 @@
+/* Hide schema controls even before the native mount event is delivered. */
+.schema-locked .new-collection,
+.schema-locked .btn-collection-settings,
+.schema-locked .backups-list button:has(> .ri-restart-line) { display: none !important; }
+.sl-variants-modal { width: min(960px, 100%); }
+.sl-variants-modal .pv-editor { min-width: 0; }
+.sl-system-active .page-header-primary-btns .new-record-btn { display: none !important; }

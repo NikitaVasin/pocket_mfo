@@ -1,4 +1,4 @@
-module pocket_mfo
+module github.com/NikitaVasin/pocket_mfo
 
 go 1.27
 

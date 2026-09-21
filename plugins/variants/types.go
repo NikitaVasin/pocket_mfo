@@ -120,6 +120,9 @@ func allConfigs(app core.App) ([]*Config, error) {
 	}
 	return result, nil
 }
+
+// Load returns the published configuration by collection name or ID.
+// It returns sql.ErrNoRows if the collection or its configuration is missing.
 func Load(app core.App, collection string) (*Config, error) {
 	c, err := app.FindCollectionByNameOrId(collection)
 	if err != nil {

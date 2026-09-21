@@ -1,10 +1,10 @@
 package migrations
 
 import (
+	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
+	"github.com/NikitaVasin/pocket_mfo/plugins/singleton"
+	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
 	"github.com/pocketbase/pocketbase"
-	"pocket_mfo/plugins/polymorphicrelation"
-	"pocket_mfo/plugins/singleton"
-	"pocket_mfo/plugins/variants"
 	"testing"
 )
 

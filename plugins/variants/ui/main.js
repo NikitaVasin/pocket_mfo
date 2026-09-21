@@ -162,7 +162,7 @@ app.components.recordsList = function(props = {}) {
 };
 
 function pvEditorState(upsert) {
-    return upsert.pvEditor || (upsert.pvEditor = store({ initialized: false, loading: true, busy: false, error: "", config: null, sets: [], preview: null, history: null, user: "", published: false, expanded: {} }));
+    return upsert.pvEditor || (upsert.pvEditor = store({ initialized: false, loading: true, busy: false, error: "", config: null, savedConfig: "", sets: [], preview: null, history: null, user: "", published: false, expanded: {} }));
 }
 function pvLoadEditor(upsert, state) {
     const cid = upsert.collection.id;
@@ -174,6 +174,7 @@ function pvLoadEditor(upsert, state) {
             const data = await app.pb.send(pvApi + cid, { requestKey: null });
             state.sets = data.sets; state.config = data.config || { collection: cid, authCollection: app.store.collections.find(c => c.type === "auth" && !c.system)?.id || "", variables: false, experiments: false, version: 0, default: { key: "default", name: "Default", experiments: [] }, variants: [], listRule: upsert.collection.listRule, viewRule: upsert.collection.viewRule };
             state.config.variants ||= []; state.config.default.experiments ||= [];
+            state.savedConfig = JSON.stringify(state.config);
         } catch (err) { state.error = err.message; } finally { state.loading = false; }
     })();
 }
@@ -189,6 +190,7 @@ async function pvPublishEditor(upsert, state) {
     try {
         const cid = upsert.collection.id;
         state.config = await app.pb.send(pvApi + cid, { requestKey: null, method: "PUT", body: JSON.parse(JSON.stringify(state.config)) });
+        state.savedConfig = JSON.stringify(state.config);
         const schema = await app.pb.collections.getOne(cid);
         upsert.collection = JSON.parse(JSON.stringify(schema)); upsert.originalCollection = JSON.parse(JSON.stringify(schema));
         await app.store.loadCollections();
@@ -389,7 +391,7 @@ app.collectionTypes.base.tabs.Variants = function(upsert) {
                 state.expanded[`variant/${key}`] = true;
                 state.config.variants.push({ key, name: "Новый вариант", condition: pvField(), experiments: [] });
             }, () => !state.config.variables)),
-            pvDisclosure(state, "access", "Исходные правила доступа", "Дополнительные ограничения для списка и просмотра", pvAccessRules(state, upsert.collection)),
+            upsert.readOnlyRules ? null : pvDisclosure(state, "access", "Исходные правила доступа", "Дополнительные ограничения для списка и просмотра", pvAccessRules(state, upsert.collection)),
             t.p({ className: "txt-hint" }, "Публикация применяется сразу. Запись контента становится доступна только суперпользователям. Удалённые наборы и история сохраняются."),
             pvButton("Опубликовать варианты", async () => {
                 await pvPublishEditor(upsert, state);

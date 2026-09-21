@@ -21,14 +21,8 @@ func install(app core.App) error {
 		for _, name := range []string{configs, sets, states, history} {
 			if existing, err := tx.FindCollectionByNameOrId(name); err == nil {
 				expected := map[string]string{configs: "definition", sets: "variant", states: "fingerprint", history: "decision"}[name]
-				if !existing.IsBase() || existing.Fields.GetByName(expected) == nil {
+				if !existing.System || !existing.IsBase() || existing.Fields.GetByName(expected) == nil {
 					return errInvalid("reserved collection name collision: %s", name)
-				}
-				if !existing.System {
-					existing.System = true
-					if err := save(tx, existing); err != nil {
-						return err
-					}
 				}
 				continue
 			} else if !errors.Is(err, sql.ErrNoRows) {
@@ -67,6 +61,10 @@ func install(app core.App) error {
 // Publish atomically installs the content field, sets, decision view and native rules.
 // Version is optimistic concurrency control: use 0 for a new configuration.
 func Publish(app core.App, input Config) (*Config, error) {
+	return publish(app, input, false)
+}
+
+func publish(app core.App, input Config, lockRules bool) (*Config, error) {
 	defer func() { _ = app.ReloadCachedCollections() }()
 	var result *Config
 	err := app.RunInTransaction(func(tx core.App) error {
@@ -90,6 +88,15 @@ func Publish(app core.App, input Config) (*Config, error) {
 		old, loadErr := Load(tx, target.Id)
 		if loadErr != nil && !errors.Is(loadErr, sql.ErrNoRows) {
 			return loadErr
+		}
+		if lockRules {
+			list, view := target.ListRule, target.ViewRule
+			if old != nil {
+				list, view = old.ListRule, old.ViewRule
+			}
+			if !sameRule(c.ListRule, list) || !sameRule(c.ViewRule, view) {
+				return ErrAdminRulesLocked
+			}
 		}
 		if old == nil {
 			if c.Version != 0 {

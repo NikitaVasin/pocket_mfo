@@ -5,7 +5,7 @@
 ## Подключение
 
 ```go
-import "pocket_mfo/plugins/singleton"
+import "github.com/NikitaVasin/pocket_mfo/plugins/singleton"
 
 singleton.Register(app) // до Bootstrap / Start
 ```
@@ -13,6 +13,8 @@ singleton.Register(app) // до Bootstrap / Start
 Работает самостоятельно и вместе с `variants.Register(app)` в любом порядке. В example оба плагина уже подключены. UI встроен в Go-бинарник.
 
 ## Включение через интерфейс
+
+Доступно в приложении без Schema Lock. В защищённом example режим задаётся через `singleton.Configure` в миграции; работа с содержимым формы остаётся доступна.
 
 1. Создайте обычную **Base**-коллекцию и сохраните поля.
 2. Откройте **Collection settings → Singleton**.

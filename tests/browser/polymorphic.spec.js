@@ -33,6 +33,8 @@ test("select, switch, save and clear the parent using native dialogs", async ({ 
     await page.getByRole("button", { name: "Open records picker", exact: true }).click();
     await page.locator(".records-picker-list .list-item").filter({ hasText: "PocketBase plugins" }).click();
     await page.getByRole("button", { name: "Set selection", exact: true }).click();
+    // Wait for the native modal's exit transition before opening another picker.
+    await expect(page.getByRole("button", { name: "Set selection", exact: true })).toHaveCount(0);
     const field = page.locator('.record-field-input').filter({ has: page.locator('output[name="subject"]') });
     await expect(field).toContainText("PocketBase plugins");
     await field.locator(".selected-container").click();

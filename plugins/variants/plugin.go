@@ -127,7 +127,11 @@ func recordSave(e *core.RecordEvent) error {
 	if managedName(c.Name) && !isInternal(e.Context) {
 		return errInvalid("service records are managed by the plugin")
 	}
-	if c.IsAuth() && c.Fields.GetByName(BucketField) != nil {
+	usesBucket, err := usesBuckets(e.App, c)
+	if err != nil {
+		return err
+	}
+	if usesBucket {
 		if r.IsNew() && r.Id == "" {
 			r.Id = security.RandomString(15)
 		}
@@ -162,6 +166,13 @@ func protectRequest(e *core.RecordRequestEvent) error {
 	}
 	for k := range info.Body {
 		if strings.Trim(k, "+-") == BucketField && e.Collection.Fields.GetByName(BucketField) != nil {
+			owned, err := usesBuckets(e.App, e.Collection)
+			if err != nil {
+				return err
+			}
+			if !owned {
+				continue
+			}
 			if e.Record.IsNew() || e.Record.GetInt(BucketField) != e.Record.Original().GetInt(BucketField) {
 				return e.BadRequestError("content_bucket is managed by the server", nil)
 			}
@@ -171,6 +182,13 @@ func protectRequest(e *core.RecordRequestEvent) error {
 }
 func ensureUserBucket(app core.App, r *core.Record) error {
 	if r == nil || r.IsSuperuser() || r.Collection().Fields.GetByName(BucketField) == nil || r.GetInt(BucketField) > 0 {
+		return nil
+	}
+	owned, err := usesBuckets(app, r.Collection())
+	if err != nil {
+		return err
+	}
+	if !owned {
 		return nil
 	}
 	return app.RunInTransaction(func(tx core.App) error {
@@ -186,6 +204,23 @@ func ensureUserBucket(app core.App, r *core.Record) error {
 		r.Set(BucketField, fresh.GetInt(BucketField))
 		return nil
 	})
+}
+
+// A same-named field in an unrelated auth collection belongs to the application.
+// Consult published configuration instead of claiming ownership by name alone.
+func usesBuckets(app core.App, collection *core.Collection) (bool, error) {
+	if !collection.IsAuth() || collection.Fields.GetByName(BucketField) == nil {
+		return false, nil
+	}
+	c, err := app.FindCachedCollectionByNameOrId(configs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	n, err := app.CountRecords(c, dbx.NewExp("json_extract([[definition]], '$.authCollection') = {:id}", dbx.Params{"id": collection.Id}))
+	return n > 0, err
 }
 
 func collectionUpdate(e *core.CollectionEvent) error {

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/migrations"
 	"github.com/pocketbase/pocketbase/tools/types"
-	"pocket_mfo/plugins/variants"
 )
 
 const (

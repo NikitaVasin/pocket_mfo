@@ -238,7 +238,10 @@ func bindRoutes(e *core.ServeEvent) {
 			return r.BadRequestError("Invalid configuration", err)
 		}
 		c.Collection = r.Request.PathValue("collection")
-		out, err := Publish(r.App, c)
+		out, err := publish(r.App, c, adminRulesLocked(r.App))
+		if errors.Is(err, ErrAdminRulesLocked) {
+			return r.ForbiddenError(err.Error(), nil)
+		}
 		if err != nil {
 			return r.BadRequestError(err.Error(), nil)
 		}

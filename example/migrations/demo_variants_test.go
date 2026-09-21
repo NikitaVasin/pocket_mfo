@@ -3,12 +3,12 @@ package migrations
 import (
 	"testing"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
+	"github.com/NikitaVasin/pocket_mfo/plugins/singleton"
+	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"pocket_mfo/plugins/polymorphicrelation"
-	"pocket_mfo/plugins/singleton"
-	"pocket_mfo/plugins/variants"
 )
 
 func TestDemoVariants(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -18,7 +19,6 @@ import (
 	"github.com/pocketbase/pocketbase/tools/search"
 	"github.com/pocketbase/pocketbase/tools/subscriptions"
 	"github.com/pocketbase/pocketbase/tools/types"
-	"pocket_mfo/plugins/polymorphicrelation"
 )
 
 type fixture struct {

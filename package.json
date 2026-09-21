@@ -1,0 +1,12 @@
+{
+  "name": "pocket-mfo-plugin-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:browser": "playwright test",
+    "test:docker": "node tests/docker-smoke.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2"
+  }
+}

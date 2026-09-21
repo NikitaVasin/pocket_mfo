@@ -1,0 +1,7 @@
+pb_data/
+example/pocketbase
+node_modules/
+test-results/
+playwright-report/
+.env
+.DS_Store

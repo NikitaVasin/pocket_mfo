@@ -1,0 +1,13 @@
+name: pocket-mfo
+services:
+  pocketbase:
+    build:
+      context: ..
+      dockerfile: example/Dockerfile
+    ports:
+      - "127.0.0.1:${POCKETBASE_PORT:-8090}:8090"
+    volumes:
+      - pb_data:/pb_data
+    restart: unless-stopped
+volumes:
+  pb_data:

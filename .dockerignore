@@ -1,0 +1,7 @@
+.git
+**/pb_data
+**/node_modules
+test-results
+playwright-report
+example/pocketbase
+.env

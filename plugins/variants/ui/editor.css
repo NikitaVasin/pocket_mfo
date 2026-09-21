@@ -1,0 +1,77 @@
+/* Layout only: colors, controls and disclosure styling come from PocketBase. */
+.pv-editor .pv-summary {
+    min-width: 0;
+    flex: 1;
+}
+.pv-editor .pv-summary-hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+.pv-editor .pv-summary strong {
+    display: block;
+    overflow-wrap: anywhere;
+}
+.pv-editor .pv-condition-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+.pv-editor .pv-condition-row > .field,
+.pv-editor .pv-condition-relation > .field {
+    min-width: 0;
+    margin-bottom: 0;
+}
+.pv-editor .pv-condition-relation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.pv-editor .pv-condition-leaf {
+    margin-bottom: 10px;
+}
+.pv-editor .pv-condition-row:has(.pv-condition-delete) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 32px;
+}
+.pv-editor .pv-condition-delete {
+    align-self: center;
+}
+.pv-editor .pv-condition-group {
+    --contentPadding: 10px;
+    margin-bottom: 10px;
+}
+.pv-editor .pv-experiment {
+    margin-bottom: 10px;
+}
+/* Native accordion rules target descendant summaries; preserve nested states. */
+.pv-editor .accordion:not([open]) > summary::before {
+    content: "\EA4E";
+}
+.pv-editor .accordion:not([open]) > summary {
+    border-radius: var(--borderRadius);
+    background: var(--surfaceColor);
+}
+@media (max-width: 600px) {
+    .pv-editor .pv-condition-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .pv-editor .pv-condition-row > :first-child {
+        grid-column: 1 / -1;
+    }
+    .pv-editor .pv-condition-row:has(.pv-condition-delete) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) 32px;
+    }
+    .pv-editor .pv-condition-row:has(.pv-condition-delete) > :first-child {
+        grid-column: 1 / -2;
+    }
+    .pv-editor .pv-condition-delete {
+        grid-column: -2 / -1;
+        grid-row: 1;
+    }
+    .pv-editor .pv-condition-relation {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

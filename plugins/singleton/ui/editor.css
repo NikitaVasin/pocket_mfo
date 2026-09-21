@@ -1,0 +1,9 @@
+.ps-active .page-content > .page-header .new-record-btn,
+.ps-active .page-content > .page-footer .total-count { display: none; }
+.ps-record-form { width: 100%; max-width: 960px; min-width: 0; margin: 20px 0; }
+.ps-fields { padding: 0; margin: 0; border: 0; min-width: 0; }
+.ps-field { margin-bottom: 16px; min-width: 0; }
+.ps-record-form .ps-actions { margin-top: 24px; }
+.ps-record-form [role=alert] { margin-bottom: 16px; }
+.ps-record-form [role=alert] button { margin: 8px; }
+.ps-settings { max-width: 760px; }

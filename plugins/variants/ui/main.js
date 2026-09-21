@@ -1,5 +1,5 @@
 // Native PocketBase components with scoped layout styles for the variants editor.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/variants/editor.css?v=1" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/variants/editor.css?v=2" }));
 const pvApi = "/api/variants/admin/collections/";
 const pvService = name => ["pv_configs", "pv_sets", "pv_states", "pv_history"].includes(name) || name?.startsWith("pv_choice_");
 const pvKey = prefix => prefix + app.utils.randomString(8).toLowerCase();
@@ -33,14 +33,15 @@ function pvPresetFilter(filter) {
 }
 
 const pvRecordsSearchbar = app.components.recordsSearchbar;
-app.components.recordsSearchbar = function(propsArg = {}) {
-    const props = store({ collection: null, value: "", hidden: false, onsubmit: () => {} });
+function pvRecordsControls(propsArg = {}) {
+    const props = store({ collection: null, value: "", hidden: false, presetsOnly: false, mainPage: false, onsubmit: () => {}, beforechange: () => true });
     const watchers = app.utils.extendStore(props, propsArg);
     const state = store({ mounted: false, managed: false, loading: false, error: "", sets: [], config: null, encoded: null, search: "" });
     let generation = 0;
     const selection = () => state.managed ? pvPresetFilter(props.value) : { set: "", search: props.value };
     const search = () => state.managed && state.encoded === props.value ? state.search : selection().search;
     function submit(set, value) {
+        if (!props.beforechange()) return;
         let filter = value;
         if (set) {
             const normalized = app.utils.normalizeSearchFilter(value, props.collection.fields.filter(f => !f.hidden).map(f => f.name));
@@ -113,7 +114,7 @@ app.components.recordsSearchbar = function(propsArg = {}) {
         className: "full-width pv-records-presets",
         hidden: () => props.hidden,
         // Pickers also use recordsSearchbar; presets belong only to the main page.
-        onmount: el => state.mounted = el.parentElement?.classList.contains("page-content") || false,
+        onmount: el => state.mounted = props.presetsOnly || props.mainPage || el.parentElement?.classList.contains("page-content") || false,
         onunmount: () => { generation++; watchers.forEach(w => w?.unwatch()); },
     },
     () => {
@@ -137,8 +138,11 @@ app.components.recordsSearchbar = function(propsArg = {}) {
                 () => selection().set, value => submit(value, search())) : null,
         );
     },
-    pvRecordsSearchbar({ ...propsArg, value: search, onsubmit: value => state.managed ? submit(selection().set, value) : props.onsubmit(value) }));
+    props.presetsOnly ? null : pvRecordsSearchbar({ ...propsArg, value: search, onsubmit: value => state.managed ? submit(selection().set, value) : props.onsubmit(value) }));
 };
+app.components.recordsSearchbar = pvRecordsControls;
+// Shared by the singleton page; normal collections retain their native search.
+app.components.variantPresets = props => pvRecordsControls({ ...props, presetsOnly: true });
 
 // Omit only the table's field definition; record editors and stored schemas keep
 // content_set intact. Hold the list empty until its default preset is ready.
@@ -415,18 +419,23 @@ app.collectionTypes.base.tabs.Variants = function(upsert) {
     return root;
 };
 
-// Restrict the native relation field editor to sets owned by the current collection.
+// Content sets are selected on the collection page, never in the record form.
+const pvIsSetField = props => props.field.name === "content_set" && pvManagedCollection(props.collection);
 const pvRelationInput = app.fieldTypes.relation.input;
 app.fieldTypes.relation.input = function(props) {
-    const target = app.store.collections.find(c => c.id === props.field.collectionId);
-    if (props.field.name !== "content_set" || target?.name !== "pv_sets") return pvRelationInput(props);
-    const local = store({ options: [], error: "" });
-    const root = t.div({ className: "record-field-input field-type-relation field" },
-        pvSelect("Набор контента", () => local.options, () => props.record.content_set || local.options.find(o => o.default)?.value || "", value => {
-            props.record.content_set = value; root.dispatchEvent(new CustomEvent("change", { bubbles: true }));
-        }), t.p({ role: "alert", hidden: () => !local.error }, () => local.error));
-    app.pb.collection("pv_sets").getFullList({ filter: app.pb.filter("collection = {:id}", { id: props.collection.id }), sort: "name", requestKey: null })
-        .then(records => { local.options = records.map(r => ({ value: r.id, label: r.name + (r.active ? "" : " (архив)"), default: r.variant === "default" && !r.experiment })); })
-        .catch(err => local.error = err.message);
-    return root;
+    return pvIsSetField(props) ? t.div({ className: "pv-content-set-field", hidden: true }) : pvRelationInput(props);
+};
+const pvRelationSave = app.fieldTypes.relation.onrecordsave;
+app.fieldTypes.relation.onrecordsave = async function(props) {
+    if (!pvIsSetField(props)) return pvRelationSave?.(props);
+    if (props.originalRecord?.id) {
+        props.payload.content_set = props.originalRecord.content_set;
+        return;
+    }
+    // Apply at save time so restored drafts and duplicated records cannot carry
+    // a stale set. A nested form for another collection uses its server default.
+    const [route, query = ""] = location.hash.split("?");
+    const params = new URLSearchParams(query);
+    const sameCollection = [props.collection.id, props.collection.name].includes(params.get("collection"));
+    props.payload.content_set = route === "#/collections" && sameCollection ? pvPresetFilter(params.get("filter")).set : "";
 };

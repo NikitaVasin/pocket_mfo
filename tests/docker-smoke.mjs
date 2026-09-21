@@ -40,6 +40,18 @@ try {
         method: "PATCH", headers: { "Content-Type": "application/json", Authorization: auth.token },
         body: JSON.stringify({ text: "docker-persistence-check" }),
     });
+    const homepage = await json("/api/collections/demo_homepage/records");
+    assert.equal(homepage.totalItems, 1, "guest sees one default singleton record");
+    const home = homepage.items[0];
+    await json(`/api/collections/demo_homepage/records/${home.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: auth.token },
+        body: JSON.stringify({ title: "singleton-persistence-check" }),
+    });
+    const duplicate = await fetch(base + "/api/collections/demo_homepage/records", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: auth.token },
+        body: JSON.stringify({ title: "duplicate", content_set: home.content_set }),
+    });
+    assert.equal(duplicate.status, 400, "database rejects a second singleton record");
     compose("restart");
     await ready();
     const after = await json("/api/collections/comments/records?expand=subject");
@@ -47,9 +59,14 @@ try {
     const persisted = after.items.find(item => item.id === record.id);
     assert.equal(persisted.text, "docker-persistence-check", "restart must preserve edits");
     assert.deepEqual(persisted.subject, record.subject);
+    const homeAfter = await json("/api/collections/demo_homepage/records");
+    assert.equal(homeAfter.totalItems, 1);
+    assert.equal(homeAfter.items[0].title, "singleton-persistence-check");
     const extension = await fetch(base + "/_/extensions.js");
-    assert.ok((await extension.text()).includes("polymorphicRelation"));
-    console.log("Docker smoke passed: health, embedded UI, expand, persistent edits and one-time seed.");
+    const source = await extension.text();
+    assert.ok(source.includes("polymorphicRelation"));
+    assert.ok(source.includes("ps-record-form"));
+    console.log("Docker smoke passed: health, embedded UI, expand, singleton constraint, persistent edits and one-time seed.");
 } finally {
     // Only removes resources belonging to this uniquely named test project.
     compose("down", "--volumes", "--remove-orphans");

@@ -3,9 +3,11 @@ package migrations
 import (
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"pocket_mfo/plugins/polymorphicrelation"
+	"pocket_mfo/plugins/singleton"
 	"pocket_mfo/plugins/variants"
 )
 
@@ -13,6 +15,7 @@ func TestDemoVariants(t *testing.T) {
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	polymorphicrelation.Register(app)
 	variants.Register(app)
+	singleton.Register(app)
 	check := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -33,6 +36,9 @@ func TestDemoVariants(t *testing.T) {
 	}
 	for collection, want := range map[string]int{demoMembersID: 6, demoSubscriptionsID: 3, "pv_sets": 6} {
 		records, err := app.FindAllRecords(collection)
+		if collection == "pv_sets" {
+			records, err = app.FindAllRecords(collection, dbx.HashExp{"collection": demoOffersID})
+		}
 		check(err)
 		if len(records) != want {
 			t.Fatalf("%s: want %d records, got %d", collection, want, len(records))

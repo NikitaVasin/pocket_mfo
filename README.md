@@ -6,6 +6,7 @@
 | --- | --- |
 | [Polymorphic Relation](plugins/polymorphicrelation) | Одно поле с одним родителем из нескольких коллекций; штатные relation-столбцы, нативная админка, `expand` |
 | [Variants](plugins/variants) | Варианты контента по аудитории, эксперименты по бакетам, нативные API rules/realtime, текущие назначения и история |
+| [Singleton](plugins/singleton) | Одна запись на коллекцию или набор Variants; включение в админке, форма вместо таблицы |
 
 Поддерживаемая версия: **PocketBase v0.40.4**, Go **1.27**. UI API этой версии экспериментальный: обновление PocketBase требует повторного запуска интеграционных и браузерных тестов. Форк PocketBase не нужен.
 
@@ -47,6 +48,8 @@ GOTOOLCHAIN=auto go run ./example serve --http=127.0.0.1:8090 --dir=./example/pb
 ```
 
 ## Подключение плагина
+
+Singleton уже подключён в example. Коллекция **demo_homepage** демонстрирует форму вместо таблицы и шесть наборов контента. Для своей коллекции: **Collection settings → Singleton → Одна запись на коллекцию → Применить**. Подробности — в [документации Singleton](plugins/singleton).
 
 ```go
 import (

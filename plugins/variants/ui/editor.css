@@ -1,4 +1,7 @@
 /* Layout only: colors, controls and disclosure styling come from PocketBase. */
+.record-upsert-modal .col-12:has(> .pv-content-set-field) {
+    display: none;
+}
 .pv-editor .pv-summary {
     min-width: 0;
     flex: 1;

@@ -1,15 +1,56 @@
 import { test, expect } from "@playwright/test";
 
-test("existing records display their content set after loading options", async ({ page }) => {
+test("records inherit the page preset and retain their set when edited", async ({ page }) => {
     await page.goto("/_/");
     await page.waitForFunction(() => window.app?.store?._ready);
-    await page.evaluate(async () => {
+    const cid = await page.evaluate(async () => {
         await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
+        const c = await app.pb.collections.create({ name: "preset_creation_offers", type: "base", fields: [{ name: "title", type: "text" }], listRule: "", viewRule: "" });
+        const { config } = await app.pb.send("/api/variants/admin/collections/demo_offers");
+        await app.pb.send(`/api/variants/admin/collections/${c.id}`, { method: "PUT", body: { ...config, collection: c.id, version: 0 } });
         await app.store.loadCollections();
-        location.hash = "#/collections?collection=demooffers00001";
+        location.hash = `#/collections?collection=${c.id}`;
+        return c.id;
     });
-    await page.getByRole("cell", { name: "Базовая подборка", exact: true }).click();
-    await expect(page.getByLabel("Набор контента", { exact: true })).toContainText("Для всех / base");
+    const records = [];
+    for (const variant of ["default", "Premium"]) {
+        await page.getByLabel("Вариант", { exact: true }).click();
+        await page.locator(".select-option:visible").filter({ hasText: new RegExp(`^${variant}$`) }).click();
+        await page.getByRole("button", { name: "New record", exact: true }).first().click();
+        await expect(page.getByLabel("Набор контента", { exact: true })).toHaveCount(0);
+        await expect(page.locator(".pv-content-set-field").locator("..")).toBeHidden();
+        await page.locator('[name="title"]').fill(`Created in ${variant}`);
+        await page.getByRole("button", { name: "Create", exact: true }).click();
+        await expect(page.getByRole("cell", { name: `Created in ${variant}`, exact: true })).toBeVisible();
+        records.push(await page.evaluate(async ({ cid, variant }) => {
+            const record = await app.pb.collection(cid).getFirstListItem(app.pb.filter("title = {:title}", { title: `Created in ${variant}` }));
+            return { record, set: await app.pb.collection("pv_sets").getOne(record.content_set) };
+        }, { cid, variant }));
+    }
+    expect(records.map(r => r.set.variant)).toEqual(["default", "premium"]);
+    expect(records.map(r => r.set.experiment)).toEqual(["", ""]);
+    // An existing record opened from a relation or direct link must keep its set,
+    // even when a different preset is selected behind its modal.
+    await page.evaluate(async ({ cid, id }) => {
+        app.modals.openRecordUpsert(await app.pb.collections.getOne(cid), id);
+    }, { cid, id: records[0].record.id });
+    await expect(page.locator('[name="title"]')).toHaveValue("Created in default");
+    await expect(page.getByLabel("Набор контента", { exact: true })).toHaveCount(0);
+    await page.locator('[name="title"]').fill("Edited default");
+    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(page.locator(".record-upsert-modal")).toHaveCount(0);
+    expect(await page.evaluate(async ({ cid, id }) => (await app.pb.collection(cid).getOne(id)).content_set,
+        { cid, id: records[0].record.id })).toBe(records[0].record.content_set);
+    // A draft created in default must not move a new row out of the current preset.
+    await page.evaluate(({ cid, set }) => localStorage.setItem(`draft_${cid}_`, JSON.stringify({ title: "Restored draft", content_set: set })),
+        { cid, set: records[0].record.content_set });
+    await page.getByRole("button", { name: "New record", exact: true }).first().click();
+    await page.getByRole("button", { name: "Restore draft", exact: true }).click();
+    await expect(page.locator('[name="title"]')).toHaveValue("Restored draft");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("cell", { name: "Restored draft", exact: true })).toBeVisible();
+    expect(await page.evaluate(async cid => (await app.pb.collection(cid).getFirstListItem('title = "Restored draft"')).content_set, cid))
+        .toBe(records[1].record.content_set);
 });
 
 test("publishing variants preserves unsaved collection schema changes", async ({ page }) => {
@@ -347,12 +388,17 @@ test("variants use native settings, publish, preview and edit sets in both theme
     await page.locator('[data-pv-section="sets"] > summary').click();
     await page.getByRole("button", { name: "Открыть записи набора", exact: true }).first().click();
     await expect(page.getByRole("button", { name: "New record", exact: true }).first()).toBeVisible();
+    await page.getByLabel("Вариант", { exact: true }).click();
+    await page.locator(".select-option:visible").filter({ hasText: /^Premium$/ }).click();
+    await page.getByLabel("Вариант эксперимента", { exact: true }).click();
+    await page.locator(".select-option:visible").filter({ hasText: /^B$/ }).click();
     await page.getByRole("button", { name: "New record", exact: true }).first().click();
-    await expect(page.getByLabel("Набор контента", { exact: true })).toBeVisible();
-    await page.getByLabel("Набор контента", { exact: true }).click();
-    await expect(page.locator(".select-option:visible")).toHaveCount(4);
-    await page.locator(".select-option:visible").filter({ hasText: /^Premium \/ Offer test \/ B$/ }).click();
+    await expect(page.getByLabel("Набор контента", { exact: true })).toHaveCount(0);
     await page.locator('[name="title"]').fill("Experiment offer");
+    for (const theme of ["light", "dark"]) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        await page.screenshot({ path: `test-results/variants-record-auto-set-${theme}.png`, fullPage: true, animations: "disabled" });
+    }
     await page.getByRole("button", { name: "Create", exact: true }).click();
     const result = await page.evaluate(async fixture => {
         const r = await app.pb.collection(fixture.collection.id).getFirstListItem('title = "Experiment offer"');

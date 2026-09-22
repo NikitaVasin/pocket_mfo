@@ -3,6 +3,7 @@ publish_to: none
 environment:
   sdk: ^3.13.4
 workspace:
+  - packages/pocket_mfo_flutter
   - packages/dynamic_link
   - packages/dynamic_link_flutter
   - packages/partner_links_flutter

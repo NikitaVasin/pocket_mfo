@@ -158,13 +158,6 @@ func register(app core.App, options Options, client *http.Client) {
 			}()
 			return r.Next()
 		}})
-		e.Router.GET("/api/partnerlinks/admin/profile-fields", func(r *core.RequestEvent) error {
-			fields, err := p.profileFields(r.App)
-			if err != nil {
-				return err
-			}
-			return r.JSON(200, fields)
-		}).Bind(apis.RequireSuperuserAuth())
 		e.Router.GET("/api/partnerlinks/admin/config", func(r *core.RequestEvent) error {
 			c, err := Load(r.App)
 			if err != nil {
@@ -176,9 +169,6 @@ func register(app core.App, options Options, client *http.Client) {
 			var c Config
 			if err := decodeBody(r, &c); err != nil {
 				return r.BadRequestError("Некорректные настройки", nil)
-			}
-			if err := p.validateProfileField(r.App, c.ProfileIDField); err != nil {
-				return r.BadRequestError(err.Error(), nil)
 			}
 			result, err := Configure(r.App, c)
 			if err != nil {

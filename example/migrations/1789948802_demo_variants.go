@@ -53,7 +53,10 @@ func demoMemberID(member demoMember) string {
 
 func ensureDemoVariants(app core.App) error {
 	return app.RunInTransaction(func(tx core.App) error {
-		members := core.NewAuthCollection("demo_members", demoMembersID)
+		if err := reserveUsersName(tx); err != nil {
+			return err
+		}
+		members := core.NewAuthCollection("users", demoMembersID)
 		members.Fields.Add(&core.TextField{Name: "name", Presentable: true}, &core.SelectField{Name: "tier", MaxSelect: 1, Values: []string{"standard", "new", "premium"}})
 		members.ListRule = types.Pointer("id = @request.auth.id")
 		members.ViewRule = types.Pointer("id = @request.auth.id")

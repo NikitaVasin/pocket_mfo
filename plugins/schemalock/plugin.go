@@ -81,7 +81,7 @@ func allowed(r *http.Request) bool {
 		"GET /api/variants/me", "GET /api/variants/me/history",
 		"GET /api/variants/admin/users/{auth}/{id}", "GET /api/variants/admin/users/{auth}/{id}/history",
 		"GET /api/variants/admin/collections/{collection}", "PUT /api/variants/admin/collections/{collection}",
-		"GET /api/partnerlinks/admin/profile-fields", "GET /api/partnerlinks/admin/config", "PUT /api/partnerlinks/admin/config",
+		"GET /api/partnerlinks/admin/config", "PUT /api/partnerlinks/admin/config",
 		"POST /api/partnerlinks/links/{id}/resolve", "GET /api/partnerlinks/r/{token}",
 		"GET /api/partnerlinks/postbacks/{provider}", "POST /api/partnerlinks/postbacks/{provider}",
 		"GET /api/singleton/admin/collections/{collection}":

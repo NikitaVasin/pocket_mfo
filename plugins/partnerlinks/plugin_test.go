@@ -125,7 +125,6 @@ func setupOptions(t *testing.T, locked, collect bool) *fixture {
 	x.admin, err = admin.NewAuthToken()
 	must(t, err)
 	cfg := DefaultConfig()
-	cfg.ProfileIDField = "appmetrica_profile_id"
 	cfg.BaseURL = "https://links.example"
 	cfg.ApplicationID = 1234
 	cfg.PostAPIKey = "fake-post-api-key"
@@ -188,7 +187,7 @@ func TestFlowAndFormats(t *testing.T) {
 	}
 	data, err := readClick(x.app, token)
 	must(t, err)
-	if data.UserID != x.user.Id || data.ProfileID != "profile-42" || data.ApplicationID != 1234 {
+	if data.UserID != x.user.Id || data.ApplicationID != 1234 {
 		t.Fatalf("wrong click data: %+v", data)
 	}
 	path := "/api/partnerlinks/r/" + token
@@ -234,7 +233,7 @@ func TestFlowAndFormats(t *testing.T) {
 		x.mu.Lock()
 		event := x.events[len(x.events)-1]
 		x.mu.Unlock()
-		if event.Get("event_name") != tc.event || event.Get("post_api_key") != "fake-post-api-key" || event.Get("profile_id") != "profile-42" || event.Get("session_type") != "foreground" || event.Get("os_name") != "" {
+		if event.Get("event_name") != tc.event || event.Get("post_api_key") != "fake-post-api-key" || event.Get("profile_id") != x.user.Id || event.Get("session_type") != "foreground" || event.Get("os_name") != "" {
 			t.Fatalf("wrong event %v", event)
 		}
 		var payload map[string]any
@@ -571,8 +570,8 @@ func TestProfileIDFromAuthenticatedRecord(t *testing.T) {
 	issued := x.issue(t)
 	data, err := readClick(x.app, tokenFrom(issued))
 	must(t, err)
-	if data.ProfileID != "profile-42" {
-		t.Fatalf("profile: %q", data.ProfileID)
+	if data.UserID != x.user.Id {
+		t.Fatalf("profile: %q", data.UserID)
 	}
 	if w := x.request("POST", path, x.auth, `{"profileId":"forged"}`, "application/json"); w.Code != 400 {
 		t.Fatalf("client profile allowed: %d", w.Code)
@@ -581,7 +580,7 @@ func TestProfileIDFromAuthenticatedRecord(t *testing.T) {
 	must(t, x.app.Save(x.user))
 	fresh, err := readClick(x.app, tokenFrom(x.issue(t)))
 	must(t, err)
-	if fresh.ProfileID != "updated-profile" {
+	if fresh.UserID != x.user.Id {
 		t.Fatal("profile did not refresh from database")
 	}
 	w := x.request("GET", "/api/partnerlinks/postbacks/test?secret="+testProvider().Secret+"&subid="+tokenFrom(issued)+"&status=new", "", "", "")
@@ -591,25 +590,8 @@ func TestProfileIDFromAuthenticatedRecord(t *testing.T) {
 	x.mu.Lock()
 	profile := x.events[0].Get("profile_id")
 	x.mu.Unlock()
-	if profile != "profile-42" {
+	if profile != x.user.Id {
 		t.Fatal("postback changed click profile")
-	}
-	for _, value := range []string{"", "  ", strings.Repeat("p", 257)} {
-		x.user.Set("appmetrica_profile_id", value)
-		must(t, x.app.Save(x.user))
-		if w := x.request("POST", path, x.auth, `{}`, "application/json"); w.Code != 400 {
-			t.Fatalf("invalid stored profile: %d", w.Code)
-		}
-	}
-	for _, field := range []string{"", "absent", "password", "tokenKey", "verified"} {
-		cfg, err := Load(x.app)
-		must(t, err)
-		cfg.ProfileIDField = field
-		_, err = Configure(x.app, *cfg)
-		must(t, err)
-		if w := x.request("POST", path, x.auth, `{}`, "application/json"); w.Code != 503 {
-			t.Fatalf("invalid profile field %q: %d", field, w.Code)
-		}
 	}
 	if x.eventCount() != 1 {
 		t.Fatal("rejected issuance delivered events")

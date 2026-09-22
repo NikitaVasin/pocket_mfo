@@ -71,7 +71,7 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 	if err != nil {
 		return err
 	}
-	if c.ProfileIDField == "" || c.BaseURL == "" || c.ApplicationID <= 0 || c.PostAPIKey == "" {
+	if c.BaseURL == "" || c.ApplicationID <= 0 || c.PostAPIKey == "" {
 		return r.Error(503, "Партнёрские ссылки не настроены", nil)
 	}
 	record, err := r.App.FindRecordById(LinksCollection, r.Request.PathValue("id"))
@@ -89,21 +89,13 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 	if err != nil {
 		return r.NotFoundError("Провайдер недоступен", nil)
 	}
-	// Only a stored text field may supply the analytics identity. Never coerce
-	// passwords, tokens, relations or JSON into a profile ID.
-	if _, ok := r.Auth.Collection().Fields.GetByName(c.ProfileIDField).(*core.TextField); !ok || c.ProfileIDField == core.FieldNameTokenKey {
-		return r.Error(503, "Поле AppMetrica profileId должно быть текстовым полем auth-коллекции", nil)
-	}
-	profileID := r.Auth.GetString(c.ProfileIDField)
-	if strings.TrimSpace(profileID) == "" || len(profileID) > 256 {
-		return r.BadRequestError("В записи пользователя не заполнен AppMetrica profileId (до 256 байт)", nil)
-	}
+
 	now := time.Now().Unix()
 	id := make([]byte, 16)
 	if _, err = rand.Read(id); err != nil {
 		return err
 	}
-	data := clickData{ClickID: base64.RawURLEncoding.EncodeToString(id), UserID: r.Auth.Id, AuthCollection: r.Auth.Collection().Id, ProfileID: profileID, ApplicationID: c.ApplicationID, LinkID: record.Id, ProviderID: prov.ID, Experiments: []variants.Decision{}, IssuedAt: now, OpenUntil: now + c.OpenTTLSeconds}
+	data := clickData{ClickID: base64.RawURLEncoding.EncodeToString(id), UserID: r.Auth.Id, AuthCollection: r.Auth.Collection().Id, ApplicationID: c.ApplicationID, LinkID: record.Id, ProviderID: prov.ID, Experiments: []variants.Decision{}, IssuedAt: now, OpenUntil: now + c.OpenTTLSeconds}
 	for _, collection := range p.options.VariantCollections {
 		cfg, err := variants.Load(r.App, collection)
 		if err != nil {
@@ -117,6 +109,10 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 			return r.InternalServerError("Не удалось определить эксперименты", nil)
 		}
 		data.Experiments = append(data.Experiments, d)
+	}
+	data.AnalyticsExperiments, err = variants.AnalyticsExperiments(r.App, data.Experiments)
+	if err != nil {
+		return r.InternalServerError("Не удалось подготовить эксперименты", nil)
 	}
 	token, err := newToken()
 	if err != nil {
@@ -409,7 +405,7 @@ func (p *plugin) postback(r *core.RequestEvent) error {
 		return r.BadRequestError("Время события должно быть в пределах последних 14 дней", nil)
 	}
 	if prov.SendRevenue && status == prov.RevenueStatus {
-		payload, _ := json.Marshal(map[string]any{"clickData": data, "conversion": conversion})
+		payload, _ := json.Marshal(map[string]any{"clickData": data, "conversion": conversion, "experiments": data.AnalyticsExperiments})
 		if len(payload) > 30*1024 {
 			return r.BadRequestError("Revenue payload превышает 30 KiB", nil)
 		}
@@ -440,7 +436,7 @@ func (p *plugin) postback(r *core.RequestEvent) error {
 func (p *plugin) send(parent context.Context, c *Config, data clickData, event string, timestamp int64, conversion map[string]any) error {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	attributes := map[string]any{"clickData": data}
+	attributes := map[string]any{"clickData": data, "experiments": data.AnalyticsExperiments}
 	if conversion != nil {
 		attributes["conversion"] = conversion
 	}
@@ -448,7 +444,7 @@ func (p *plugin) send(parent context.Context, c *Config, data clickData, event s
 	if err != nil {
 		return err
 	}
-	q := url.Values{"post_api_key": {c.PostAPIKey}, "application_id": {strconv.FormatInt(data.ApplicationID, 10)}, "profile_id": {data.ProfileID}, "session_type": {"foreground"}, "event_name": {c.EventNames[event]}, "event_timestamp": {strconv.FormatInt(timestamp, 10)}, "event_json": {string(b)}}
+	q := url.Values{"post_api_key": {c.PostAPIKey}, "application_id": {strconv.FormatInt(data.ApplicationID, 10)}, "profile_id": {data.UserID}, "session_type": {"foreground"}, "event_name": {c.EventNames[event]}, "event_timestamp": {strconv.FormatInt(timestamp, 10)}, "event_json": {string(b)}}
 	return p.deliver(ctx, appMetricaURL, q)
 }
 
@@ -485,7 +481,7 @@ func validateRevenue(conversion map[string]any) error {
 func (p *plugin) sendRevenue(parent context.Context, c *Config, data clickData, timestamp int64, conversion map[string]any) error {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	payload, err := json.Marshal(map[string]any{"clickData": data, "conversion": conversion})
+	payload, err := json.Marshal(map[string]any{"clickData": data, "conversion": conversion, "experiments": data.AnalyticsExperiments})
 	if err != nil {
 		return err
 	}
@@ -493,6 +489,6 @@ func (p *plugin) sendRevenue(parent context.Context, c *Config, data clickData, 
 	if len(payload) > 30*1024 {
 		return fmt.Errorf("appmetrica: revenue payload too large")
 	}
-	q := url.Values{"post_api_key": {c.PostAPIKey}, "application_id": {strconv.FormatInt(data.ApplicationID, 10)}, "profile_id": {data.ProfileID}, "session_type": {"foreground"}, "event_timestamp": {strconv.FormatInt(timestamp, 10)}, "revenue_event_type": {"one_time_purchase"}, "price": {conversion["amount"].(string)}, "currency": {conversion["currency"].(string)}, "product_id": {data.LinkID}, "quantity": {"1"}, "payload": {string(payload)}}
+	q := url.Values{"post_api_key": {c.PostAPIKey}, "application_id": {strconv.FormatInt(data.ApplicationID, 10)}, "profile_id": {data.UserID}, "session_type": {"foreground"}, "event_timestamp": {strconv.FormatInt(timestamp, 10)}, "revenue_event_type": {"one_time_purchase"}, "price": {conversion["amount"].(string)}, "currency": {conversion["currency"].(string)}, "product_id": {data.LinkID}, "quantity": {"1"}, "payload": {string(payload)}}
 	return p.deliver(ctx, "https://api.appmetrica.yandex.ru/logs/v1/import/revenue", q)
 }

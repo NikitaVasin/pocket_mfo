@@ -25,11 +25,11 @@ docker compose -f example/compose.yaml up --build
 
 В example включён **Schema Lock**: доступен CRUD записей и суперпользователей, а также кнопка **Variants** на странице обычной коллекции. Настройки сервера, cron, логи, экспорт схемы и бэкапы доступны. Редактирование схемы, SQL, импорт, восстановление бэкапов и переключение Singleton закрыты через UI и HTTP API. Остальные системные записи доступны только для чтения. Схему и настройки Singleton задавайте в Go/миграциях; базовые правила Variants меняйте через `variants.Publish`. Описанные ниже редакторы схемы доступны при подключении плагинов без Schema Lock.
 
-Миграция создаёт `articles`, `videos`, `comments` и по одному комментарию к статье и видео. Поле `comments.subject` необязательное, удаление родителя по умолчанию запрещено. Чтение демоданных открыто; изменение доступно суперпользователю. Штатная auth-коллекция `users` также остаётся доступна.
+Миграция создаёт `articles`, `videos`, `comments` и по одному комментарию к статье и видео. Поле `comments.subject` необязательное, удаление родителя по умолчанию запрещено. Чтение демоданных открыто; изменение доступно суперпользователю. Для авторизации используется единая коллекция `users`.
 
-Для плагина Variants создаются `demo_members` (6 пользователей), `demo_subscriptions` (3 подписки) и `demo_offers` (12 записей в 6 наборах). Настройки открываются кнопкой **Variants** коллекции `demo_offers`; выбор набора — селекторами над записями. Общий пароль демопользователей: **`demo-variants-123`**.
+Для плагина Variants создаются `users` (6 пользователей), `demo_subscriptions` (3 подписки) и `demo_offers` (12 записей в 6 наборах). Настройки открываются кнопкой **Variants** коллекции `demo_offers`; выбор набора — селекторами над записями. Общий пароль демопользователей: **`demo-variants-123`**.
 
-| Email в `demo_members` | Выбранный набор |
+| Email в `users` | Выбранный набор |
 | --- | --- |
 | `default@variants.test` | Default |
 | `newcomer@variants.test` | Новички |
@@ -38,7 +38,7 @@ docker compose -f example/compose.yaml up --build
 | `subscriber@variants.test` | Оплаченная подписка; правило выше Premium |
 | `split@variants.test` | Default: активность и оплата относятся к разным подпискам |
 
-Каждый пользователь получает две записи через обычный API `demo_offers`; гость получает Default, суперпользователь видит все наборы. A/B делит бакеты пополам. Базовый набор Premium доступен после отключения экспериментов. Для проверки участия авторизуйтесь через `demo_members` и вызовите `GET /api/variants/me?collection=demo_offers`; история наблюдавшихся назначений появляется после обращений пользователя. В админке можно выбрать демопользователя в предпросмотре Variants без добавления записи в историю.
+Каждый пользователь получает две записи через обычный API `demo_offers`; гость получает Default, суперпользователь видит все наборы. A/B делит бакеты пополам. Базовый набор Premium доступен после отключения экспериментов. Для проверки участия авторизуйтесь через `users` и вызовите `GET /api/variants/me?collection=demo_offers`; история наблюдавшихся назначений появляется после обращений пользователя. В админке можно выбрать демопользователя в предпросмотре Variants без добавления записи в историю.
 
 Данные хранятся в Docker volume `pb_data`. Обычные перезапуски и `docker compose down` сохраняют их; повторный запуск не дублирует seed и не перезаписывает изменения. Для другого порта задайте `POCKETBASE_PORT`, например:
 
@@ -122,7 +122,7 @@ Docker smoke-тест использует собственный Compose projec
 
 ## Партнёрские ссылки и Flutter
 
-В example подключён Partner Links: **Партнёрские ссылки** в верхней панели, коллекция `partner_links` и демонстрационный провайдер. Для выдачи ссылок задайте Application ID/Post API key в админке, затем укажите текстовое поле пользователя с AppMetrica profileId. Реальные ключи не входят в демо. [Настройка и контракт API](plugins/partnerlinks/README.md).
+В example подключён Partner Links: **Партнёрские ссылки** в верхней панели, коллекция `partner_links` и демонстрационный провайдер. Для выдачи ссылок задайте Application ID/Post API key в админке, AppMetrica profileId всегда равен `user.id`. Реальные ключи не входят в демо. [Настройка и контракт API](plugins/partnerlinks/README.md).
 
 Пакеты [dynamic_link](packages/dynamic_link), [dynamic_link_flutter](packages/dynamic_link_flutter) и [partner_links_flutter](packages/partner_links_flutter) находятся в `packages/`. Требуется Dart ≥3.13.2; пример интеграции и команды тестирования — в [README клиента](packages/partner_links_flutter/README.md).
 
@@ -153,3 +153,7 @@ fvm flutter analyze
 fvm dart test packages/dynamic_link/test
 fvm flutter test packages/dynamic_link_flutter/test packages/partner_links_flutter/test packages/app_messaging_flutter/test packages/push_links_flutter/test examples/partner_links_app/test
 ```
+
+## Единый Flutter-пакет
+
+[pocket_mfo_flutter](packages/pocket_mfo_flutter/README.md) объединяет гостевой/обычный вход, защищённое хранение сессии, AppMetrica с user.id, снимок экспериментов в каждом событии, партнёрские ссылки и опциональные пуши. [Пример](examples/partner_links_app) автоматически входит гостем через `users`. Существующая `demo_members` переименовывается с сохранением ID и записей; заполненная отдельная `users` требует ручного решения конфликта, миграция её не удаляет.

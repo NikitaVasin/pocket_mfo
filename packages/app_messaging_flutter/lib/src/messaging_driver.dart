@@ -20,6 +20,10 @@ abstract interface class MessagingDriver {
 }
 
 final class NativeMessagingDriver implements MessagingDriver {
+  NativeMessagingDriver({this.analyticsAlreadyActivated = false});
+
+  /// The application integration owns activation and profile changes.
+  final bool analyticsAlreadyActivated;
   static const _channel = MethodChannel('dev.appbase/app_messaging');
   static NativeMessagingDriver? _owner;
   final _actions = StreamController<PushAction>.broadcast();
@@ -45,7 +49,9 @@ final class NativeMessagingDriver implements MessagingDriver {
     _owner = this;
     if (Firebase.apps.isEmpty) await Firebase.initializeApp();
     _ensureAlive();
-    await AppMetrica.activate(AppMetricaConfig(appMetricaApiKey));
+    if (!analyticsAlreadyActivated) {
+      await AppMetrica.activate(AppMetricaConfig(appMetricaApiKey));
+    }
     _ensureAlive();
     // Subscribe before draining the native cold-start queue.
     _channel.setMethodCallHandler((call) async {

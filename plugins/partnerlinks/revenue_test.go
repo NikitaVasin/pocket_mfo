@@ -3,6 +3,7 @@ package partnerlinks
 import (
 	"encoding/json"
 	"net/url"
+	"reflect"
 	"testing"
 )
 
@@ -24,6 +25,8 @@ func TestRevenueSelectedStatusAndValidationBeforeSideEffects(t *testing.T) {
 			x.config, err = Configure(x.app, *x.config)
 			must(t, err)
 			token := tokenFrom(x.issue(t))
+			click, err := readClick(x.app, token)
+			must(t, err)
 			q := url.Values{"secret": {testProvider().Secret}, "subid": {token}, "status": {rawRevenueStatus}, "lead_id": {"order-1"}, "amount": {"123.45000001"}, "currency": {"RUB"}}
 			post := func() int { return x.request("GET", "/api/partnerlinks/postbacks/test?"+q.Encode(), "", "", "").Code }
 			for _, invalid := range []struct{ key, value string }{{"amount", "1e3"}, {"amount", "10000000000"}, {"amount", "1.000000001"}, {"currency", "rub"}, {"lead_id", ""}} {
@@ -70,13 +73,20 @@ func TestRevenueSelectedStatusAndValidationBeforeSideEffects(t *testing.T) {
 				}
 			}
 			x.mu.Unlock()
-			if event.Get("revenue_event_type") != "one_time_purchase" || event.Get("price") != "123.45000001" || event.Get("currency") != "RUB" || event.Get("product_id") != x.link.Id || event.Get("profile_id") != "profile-42" || event.Get("session_type") != "foreground" || event.Get("quantity") != "1" || event.Get("event_name") != "" {
+			if event.Get("revenue_event_type") != "one_time_purchase" || event.Get("price") != "123.45000001" || event.Get("currency") != "RUB" || event.Get("product_id") != x.link.Id || event.Get("profile_id") != x.user.Id || event.Get("session_type") != "foreground" || event.Get("quantity") != "1" || event.Get("event_name") != "" {
 				t.Fatalf("wrong revenue: %v", event)
 			}
 			var payload map[string]any
 			must(t, json.Unmarshal([]byte(event.Get("payload")), &payload))
 			if payload["conversion"].(map[string]any)["leadId"] != "order-1" {
 				t.Fatal("missing order attribution")
+			}
+			var gotExperiments map[string]string
+			encoded, err := json.Marshal(payload["experiments"])
+			must(t, err)
+			must(t, json.Unmarshal(encoded, &gotExperiments))
+			if !reflect.DeepEqual(gotExperiments, click.AnalyticsExperiments) {
+				t.Fatal("Revenue lost experiment snapshot")
 			}
 			// Failure is retryable; no success is reported if Revenue was rejected.
 			x.mu.Lock()

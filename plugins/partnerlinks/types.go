@@ -20,7 +20,6 @@ type Options struct {
 }
 
 type Config struct {
-	ProfileIDField          string            `json:"profileIdField"`
 	Version                 int               `json:"version"`
 	BaseURL                 string            `json:"baseUrl"`
 	ApplicationID           int64             `json:"applicationId"`
@@ -69,16 +68,16 @@ type ResolveResponse struct {
 }
 
 type clickData struct {
-	ClickID        string              `json:"clickId"`
-	UserID         string              `json:"userId"`
-	AuthCollection string              `json:"authCollection"`
-	ProfileID      string              `json:"profileId"`
-	ApplicationID  int64               `json:"applicationId"`
-	LinkID         string              `json:"linkId"`
-	ProviderID     string              `json:"providerId"`
-	Experiments    []variants.Decision `json:"experiments"`
-	IssuedAt       int64               `json:"issuedAt"`
-	OpenUntil      int64               `json:"openUntil"`
+	ClickID              string              `json:"clickId"`
+	UserID               string              `json:"userId"`
+	AuthCollection       string              `json:"authCollection"`
+	ApplicationID        int64               `json:"applicationId"`
+	LinkID               string              `json:"linkId"`
+	ProviderID           string              `json:"providerId"`
+	AnalyticsExperiments map[string]string   `json:"analyticsExperiments"`
+	Experiments          []variants.Decision `json:"experiments"`
+	IssuedAt             int64               `json:"issuedAt"`
+	OpenUntil            int64               `json:"openUntil"`
 }
 
 func DefaultConfig() Config {

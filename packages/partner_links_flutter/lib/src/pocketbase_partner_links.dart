@@ -5,7 +5,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'partner_link_result.dart';
 
 /// Uses this PocketBase instance and its current authentication.
-/// The server reads the AppMetrica profile ID from the configured user field.
+/// The server uses PocketBase user.id as the AppMetrica profile ID.
 /// Does not cache tokens, report SDK events, or follow redirects.
 extension PocketBasePartnerLinks on PocketBase {
   /// Issues a new token for each call. API errors remain [ClientException]s.

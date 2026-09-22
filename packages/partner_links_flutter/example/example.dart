@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:partner_links_flutter/partner_links_flutter.dart';
 import 'package:pocketbase/pocketbase.dart';
 
-/// Supply an authenticated PocketBase. Configure the stored profile field on the server.
+/// Supply an authenticated PocketBase. Set AppMetrica SDK profile ID to PocketBase user.id.
 class OfferButton extends StatefulWidget {
   const OfferButton({super.key, required this.pb, required this.linkId});
   final PocketBase pb;

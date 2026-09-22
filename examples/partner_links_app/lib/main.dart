@@ -1,17 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:partner_links_flutter/partner_links_flutter.dart';
+import 'package:flutter/foundation.dart';
+import 'package:pocket_mfo_flutter/pocket_mfo_flutter.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import 'data/demo_repository.dart';
 import 'ui/demo_model.dart';
-import 'ui/messaging_model.dart';
 
 void main() => runApp(const PartnerLinksExample(enableMessaging: true));
 
 class PartnerLinksExample extends StatefulWidget {
-  const PartnerLinksExample({super.key, this.enableMessaging = false});
+  const PartnerLinksExample({
+    super.key,
+    this.enableMessaging = false,
+    this.integration,
+  });
+  final PocketMfo? integration;
   final bool enableMessaging;
   @override
   State<PartnerLinksExample> createState() => _PartnerLinksExampleState();
@@ -19,41 +25,55 @@ class PartnerLinksExample extends StatefulWidget {
 
 class _PartnerLinksExampleState extends State<PartnerLinksExample> {
   final navigatorKey = GlobalKey<NavigatorState>();
-  late final model = DemoModel(
-    DemoRepository(PocketBase(_DemoPageState.serverUrl)),
-  );
-  late final notifications = MessagingModel(
-    demo: model,
-    navigatorKey: navigatorKey,
-    onNavigate: (uri) async {
-      if (!mounted) return;
-      if (uri.path == '/offers') {
-        navigatorKey.currentState!.popUntil((route) => route.isFirst);
-      } else if (uri.path == '/orders') {
-        unawaited(
-          navigatorKey.currentState!.push<void>(
-            MaterialPageRoute(builder: (_) => _OrdersPage(model: model)),
-          ),
-        );
-      } else {
-        throw FormatException('Unknown application route');
-      }
-    },
-  );
+  late final PocketMfo integration;
+  late final DemoModel model;
 
   @override
   void initState() {
     super.initState();
-    if (widget.enableMessaging) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(notifications.initialize());
-      });
-    }
+    const sdkKey = String.fromEnvironment('APPMETRICA_SDK_KEY');
+    final preview = kIsWeb || sdkKey.isEmpty;
+    integration =
+        widget.integration ??
+        PocketMfo(
+          pocketBase: PocketBase(_DemoPageState.serverUrl),
+          authCollection: 'users',
+          appMetricaConfig: AppMetricaConfig(preview ? 'preview-only' : sdkKey),
+          analytics: preview ? PreviewAnalytics() : null,
+          storage: kIsWeb ? MemorySessionStorage() : null,
+          push: !preview && widget.enableMessaging
+              ? PocketMfoPushConfig(
+                  navigatorKey: navigatorKey,
+                  onNavigate: (uri) async {
+                    if (!mounted) return;
+                    if (uri.path == '/orders') {
+                      unawaited(
+                        navigatorKey.currentState!.push<void>(
+                          MaterialPageRoute(
+                            builder: (_) => _OrdersPage(model: model),
+                          ),
+                        ),
+                      );
+                    } else if (uri.path == '/offers') {
+                      navigatorKey.currentState!.popUntil(
+                        (route) => route.isFirst,
+                      );
+                    } else {
+                      throw const FormatException('Unknown route');
+                    }
+                  },
+                )
+              : null,
+        );
+    model = DemoModel(DemoRepository(integration));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(model.initialize());
+    });
   }
 
   @override
   void dispose() {
-    if (widget.enableMessaging) notifications.dispose();
+    unawaited(integration.dispose());
     model.dispose();
     super.dispose();
   }
@@ -67,17 +87,14 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
       brightness: Brightness.dark,
       colorSchemeSeed: const Color(0xff315b7c),
     ),
-    home: DemoPage(
-      model: model,
-      notifications: widget.enableMessaging ? notifications : null,
-    ),
+    home: DemoPage(model: model, integration: integration),
   );
 }
 
 class DemoPage extends StatefulWidget {
-  const DemoPage({super.key, required this.model, this.notifications});
+  const DemoPage({super.key, required this.model, required this.integration});
   final DemoModel model;
-  final MessagingModel? notifications;
+  final PocketMfo integration;
   @override
   State<DemoPage> createState() => _DemoPageState();
 }
@@ -139,45 +156,45 @@ class _DemoPageState extends State<DemoPage> {
             padding: const EdgeInsets.all(24),
             children: [
               Text(serverUrl, style: Theme.of(context).textTheme.bodySmall),
-              if (widget.notifications case final notifications?)
-                ListenableBuilder(
-                  listenable: notifications,
-                  builder: (context, _) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 16),
-                      Text(notifications.status),
-                      if (notifications.available)
-                        TextButton.icon(
-                          onPressed: notifications.ready
-                              ? notifications.requestPermission
-                              : null,
-                          icon: const Icon(Icons.notifications_outlined),
-                          label: const Text('Разрешить уведомления'),
-                        ),
-                      if (model.signedIn)
-                        Wrap(
-                          spacing: 12,
-                          children: [
-                            OutlinedButton(
-                              onPressed: () => notifications.preview({
-                                'type': 'route',
-                                'url': '/orders',
-                              }),
-                              child: const Text('Проверить переход'),
-                            ),
-                            OutlinedButton(
-                              onPressed: () => notifications.preview({
-                                'type': 'partner',
-                                'id': 'demopartner0001',
-                              }),
-                              child: const Text('Проверить экран поверх'),
-                            ),
-                          ],
-                        ),
-                    ],
+              if (model.signedIn) ...[
+                Semantics(
+                  container: true,
+                  child: Text(
+                    'Пользователь: ${widget.integration.user?.id} · ${widget.integration.isGuest ? "гость" : "аккаунт"}',
                   ),
                 ),
+                Text(
+                  'Эксперименты: ${jsonEncode(widget.integration.experiments)}',
+                ),
+                TextButton(
+                  onPressed: model.busy
+                      ? null
+                      : () async {
+                          try {
+                            await widget.integration.reportEvent(
+                              'demo_button',
+                              parameters: {'screen': 'offers'},
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Событие отправлено'),
+                                ),
+                              );
+                            }
+                          } catch (_) {
+                            model.showOpenError();
+                          }
+                        },
+                  child: const Text('Отправить тестовое событие'),
+                ),
+                if (widget.integration.messaging != null)
+                  TextButton(
+                    onPressed: () =>
+                        widget.integration.messaging!.requestPermission(),
+                    child: const Text('Разрешить уведомления'),
+                  ),
+              ],
               const SizedBox(height: 20),
               if (model.busy) const LinearProgressIndicator(),
               if (model.error != null)
@@ -190,7 +207,7 @@ class _DemoPageState extends State<DemoPage> {
                     ),
                   ),
                 ),
-              if (!model.signedIn) ...[
+              if (!model.signedIn || widget.integration.isGuest) ...[
                 Text(
                   'Демонстрационный вход',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -216,9 +233,10 @@ class _DemoPageState extends State<DemoPage> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Используйте пользователей из Go example. AppMetrica получает ID пользователя после входа. Для партнёрских ссылок выберите поле профиля id в настройках сервера.',
+                  'Используйте пользователей из Go example. AppMetrica получает ID пользователя после входа. profileId всегда равен user.id. Без APPMETRICA_SDK_KEY аналитика работает в режиме предпросмотра.',
                 ),
-              ] else ...[
+              ],
+              if (model.signedIn) ...[
                 Text(
                   'Офферы',
                   style: Theme.of(context).textTheme.headlineSmall,
@@ -297,3 +315,16 @@ String statusLabel(String status) => switch (status) {
   'rejected' => 'Отказ',
   _ => status,
 };
+
+// Browser/no-key adapter: exercises the integration without sending analytics.
+class PreviewAnalytics implements PocketMfoAnalytics {
+  @override
+  Future<void> activate(AppMetricaConfig config, String userId) async {}
+  @override
+  Future<void> setUserId(String? userId) async {}
+  @override
+  Future<void> reportEvent(
+    String name,
+    Map<String, Object?> parameters,
+  ) async {}
+}

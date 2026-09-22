@@ -68,7 +68,7 @@ app.fieldTypes.text.input = function(props) {
 
 function partnerSettingsContent() {
     app.store.title = "Партнёрские ссылки";
-    const state = store({ config: null, profileFields: [], error: "", notice: "", loading: true, saving: false });
+    const state = store({ config: null, error: "", notice: "", loading: true, saving: false });
     let sequence = 0;
     const expandedProviders = new Map();
     const statusChoices = [["lead", "Заявка создана (лид)"], ["approved", "Подтверждение"], ["hold", "Холд / ожидание"], ["rejected", "Отказ"]];
@@ -110,8 +110,7 @@ function partnerSettingsContent() {
     async function load() {
         state.loading = true; state.error = "";
         try {
-            const [config, fields] = await Promise.all([app.pb.send("/api/partnerlinks/admin/config"), app.pb.send("/api/partnerlinks/admin/profile-fields")]);
-            state.profileFields = fields;
+            const config = await app.pb.send("/api/partnerlinks/admin/config");
             state.config = prepare(config);
         }
         catch (error) { state.error = message(error); }
@@ -207,7 +206,7 @@ function partnerSettingsContent() {
                 t.li(null, "Укажите публичный HTTPS-адрес этого сервера, доступный приложению и партнёру. При выдаче ссылки сервер сохраняет данные клика в conversations. Партнёр получает только случайный токен clickData и возвращает его в постбеке."),
                 t.li(null, "Добавьте провайдера. По его документации настройте параметр передачи clickData, имена полей постбека и значения статусов. Передайте партнёру адрес постбека и секрет."),
                 t.li(null, "Сохраните настройки. В коллекции partner_links создайте запись: name — название, provider — выберите сохранённого провайдера из списка, active — включено. В поле link (Dynamic link) укажите исходный URL и параметры открытия; по умолчанию используются WebView, cookies и индикатор загрузки."),
-                t.li(null, "Сохраните AppMetrica profileId в текстовом поле пользователя и укажите имя этого поля ниже. Значение должно совпадать с profileId в SDK. Приложение запрашивает ссылку только по ID записи partner_links; сервер читает профиль из записи авторизованного пользователя. При переходе отправляется клик. Для заявки и дальнейших статусов партнёр присылает отдельные постбеки.")),
+                t.li(null, "AppMetrica profileId всегда равен ID пользователя PocketBase. Передайте user.id в SDK до активации; отдельное поле пользователя не требуется. Приложение запрашивает ссылку только по ID записи partner_links; сервер использует ID авторизованного пользователя. При переходе отправляется клик. Для заявки и дальнейших статусов партнёр присылает отдельные постбеки.")),
             t.p({ className: "txt-hint" }, "200 в ответе постбека означает, что AppMetrica приняла загрузку. При 502 партнёр должен повторить запрос. Повторы могут создавать дубли: очередь и дедупликация здесь не используются."));
     }
     load();
@@ -224,7 +223,6 @@ function partnerSettingsContent() {
                     t.div({ className: "pl-grid" },
                         field("Публичный URL сервера", state.config, "baseUrl", { type: "url", hint: "Например https://api.example.com — без /api и /_/. Из него формируются адреса переходов и постбеков." }),
                         field("Application ID", state.config, "applicationId", { type: "number", hint: "Числовой идентификатор приложения в AppMetrica, например 1234567." }),
-                        field("Поле AppMetrica profileId", state.config, "profileIdField", { choices: [["", "Выберите поле пользователя"], ...state.profileFields.map(f => [f.name, `${f.name} (${f.collections.join(", ")})`])], hint: "Текстовые поля пользователей из подключённых auth-коллекций. Выберите поле, содержащее тот же profileId, который известен SDK AppMetrica." }),
                         field("Post API key", state.config, "postApiKey", { type: "password", hint: state.config.hasPostApiKey ? "Ключ сохранён. Пустое поле сохраняет текущий." : "Ключ загрузки событий из настроек AppMetrica. Не путайте с ключом SDK или секретом партнёра." }),
                         field("Срок открытия ссылки, секунд", state.config, "openTtlSeconds", { type: "number", required: true, hint: "86400 = 1 сутки после выдачи. Позже приложение должно запросить новую ссылку." }),
                         field("Без заявки: хранить дней", state.config, "pendingRetentionDays", { type: "number", required: true, hint: "По умолчанию 14 дней от выдачи ссылки. Это записи pending, по которым ещё не было ни одного статуса от партнёра. 0 — хранить бессрочно." }),

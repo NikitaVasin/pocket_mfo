@@ -116,26 +116,4 @@ func TestCollectionAlwaysCreatedAndProfileFieldChoices(t *testing.T) {
 	if _, err := x.app.FindCollectionByNameOrId(ConversationsCollection); err != nil {
 		t.Fatal("default collection missing")
 	}
-	path := "/api/partnerlinks/admin/profile-fields"
-	if w := x.request("GET", path, x.auth, "", ""); w.Code != 403 {
-		t.Fatal("user accessed config fields")
-	}
-	w := x.request("GET", path, x.admin, "", "")
-	if w.Code != 200 {
-		t.Fatalf("fields %d %s", w.Code, w.Body)
-	}
-	var fields []profileField
-	must(t, json.Unmarshal(w.Body.Bytes(), &fields))
-	found := false
-	for _, f := range fields {
-		if f.Name == "appmetrica_profile_id" {
-			found = true
-		}
-		if f.Name == "tokenKey" || f.Name == "password" {
-			t.Fatal("secret field listed")
-		}
-	}
-	if !found {
-		t.Fatal("missing custom profile field")
-	}
 }

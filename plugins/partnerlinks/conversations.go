@@ -182,7 +182,7 @@ func loadConversation(app core.App, token string) (*core.Record, clickData, erro
 		return nil, data, err
 	}
 	err = json.Unmarshal([]byte(r.GetString("clickData")), &data)
-	if err == nil && (data.ClickID == "" || data.ClickID != r.GetString("clickId") || data.ProfileID == "" || data.UserID != r.GetString("userId") || data.AuthCollection != r.GetString("authCollection") || data.ProviderID != r.GetString("provider") || data.IssuedAt <= 0 || data.OpenUntil <= data.IssuedAt) {
+	if err == nil && (data.ClickID == "" || data.ClickID != r.GetString("clickId") || data.UserID != r.GetString("userId") || data.AuthCollection != r.GetString("authCollection") || data.ProviderID != r.GetString("provider") || data.IssuedAt <= 0 || data.OpenUntil <= data.IssuedAt) {
 		err = fmt.Errorf("partnerlinks: invalid stored click data")
 	}
 	return r, data, err

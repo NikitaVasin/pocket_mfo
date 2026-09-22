@@ -314,7 +314,7 @@ test("collection presets preserve search and URLs and allow additional API rules
     const guestList = await request.get("/api/collections/demo_offers/records");
     expect((await guestList.json()).totalItems).toBe(0);
     expect((await request.get("/api/collections/demo_offers/records/demooffer000001")).status()).toBe(404);
-    const auth = await request.post("/api/collections/demo_members/auth-with-password", { data: { identity: "premium-a@variants.test", password: "demo-variants-123" } });
+    const auth = await request.post("/api/collections/users/auth-with-password", { data: { identity: "premium-a@variants.test", password: "demo-variants-123" } });
     const headers = { Authorization: (await auth.json()).token };
     const memberList = await request.get("/api/collections/demo_offers/records", { headers });
     const memberRows = await memberList.json();

@@ -25,13 +25,22 @@ class DemoModel extends ChangeNotifier {
   bool busy = false;
   String? error;
 
+  Future<void> initialize() => _run(() async {
+    await repository.initialize();
+    signedIn = true;
+    await _load();
+  });
+
   Future<void> login(String email, String password) => _run(() async {
     await repository.login(email.trim(), password);
     signedIn = true;
     await _load();
   });
 
-  Future<void> refresh() => _run(_load);
+  Future<void> refresh() => _run(() async {
+    await _load();
+    await repository.integration.refreshExperiments();
+  });
 
   Future<void> _load() async {
     offers = List.unmodifiable(await repository.offers());
@@ -75,12 +84,12 @@ class DemoModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logout() {
-    repository.logout();
-    signedIn = false;
+  Future<void> logout() => _run(() async {
     offers = const [];
     orders = const [];
-    error = null;
-    notifyListeners();
-  }
+    signedIn = false;
+    await repository.logout();
+    signedIn = true;
+    await _load();
+  });
 }

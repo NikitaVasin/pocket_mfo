@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/pocketbase/dbx"
@@ -183,9 +182,6 @@ func defaultRevenueStatuses(c *Config) {
 
 func validateConfig(c *Config) error {
 	defaultRevenueStatuses(c)
-	if c.ProfileIDField != "" && !regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,255}$`).MatchString(c.ProfileIDField) {
-		return fmt.Errorf("partnerlinks: invalid profileIdField name")
-	}
 	if c.BaseURL != "" {
 		u, err := webURL(c.BaseURL)
 		if err != nil {

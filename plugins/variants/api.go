@@ -286,7 +286,11 @@ func decisionsResponse(r *core.RequestEvent, user *core.Record, recordHistory bo
 		}
 		items = append(items, d)
 	}
-	return r.JSON(http.StatusOK, map[string]any{"items": items})
+	analytics, err := AnalyticsExperiments(r.App, items)
+	if err != nil {
+		return err
+	}
+	return r.JSON(http.StatusOK, map[string]any{"items": items, "experiments": analytics})
 }
 func historyResponse(r *core.RequestEvent, user *core.Record) error {
 	page, _ := strconv.Atoi(r.Request.URL.Query().Get("page"))

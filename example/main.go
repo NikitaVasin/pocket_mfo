@@ -19,7 +19,7 @@ func main() {
 	variants.Register(app)
 	singleton.Register(app)
 	dynamiclink.Register(app)
-	partnerOptions := partnerlinks.Options{AuthCollections: []string{"demo_members"}, VariantCollections: []string{"demo_offers", dynamiclink.SettingsCollection}}
+	partnerOptions := partnerlinks.Options{AuthCollections: []string{"users"}, VariantCollections: []string{"demo_offers", dynamiclink.SettingsCollection}}
 	partnerlinks.Register(app, partnerOptions)
 	schemalock.Register(app)
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{Automigrate: false})

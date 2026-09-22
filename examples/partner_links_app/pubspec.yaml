@@ -5,6 +5,8 @@ resolution: workspace
 environment:
   sdk: ^3.13.4
 dependencies:
+  pocket_mfo_flutter:
+    path: ../../packages/pocket_mfo_flutter
   flutter:
     sdk: flutter
   pocketbase: ^0.25.1

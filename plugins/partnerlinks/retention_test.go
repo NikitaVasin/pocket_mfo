@@ -42,7 +42,7 @@ func TestResolveStoresSnapshotAndOpaqueToken(t *testing.T) {
 	if len(token) != 43 || r.GetString("tokenHash") == token || r.GetString("tokenHash") == "" {
 		t.Fatal("not an opaque hashed token")
 	}
-	if r.GetString("status") != "pending" || r.GetString("leadId") != "" || d.ProfileID != "profile-42" || len(d.Experiments) == 0 || d.ClickID != first.ClickID {
+	if r.GetString("status") != "pending" || r.GetString("leadId") != "" || d.UserID != x.user.Id || len(d.Experiments) == 0 || d.ClickID != first.ClickID {
 		t.Fatalf("missing snapshot: %+v", d)
 	}
 	if x.eventCount() != 0 {

@@ -7,5 +7,5 @@ import (
 )
 
 func init() {
-	migrations.Register(func(app core.App) error { return dynamiclink.Configure(app, "demo_members") }, func(core.App) error { return nil })
+	migrations.Register(func(app core.App) error { return dynamiclink.Configure(app, demoMembersID) }, func(core.App) error { return nil })
 }

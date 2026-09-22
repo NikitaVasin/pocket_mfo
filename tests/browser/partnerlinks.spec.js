@@ -26,7 +26,6 @@ test("partner settings use native top navigation and profile field selector", as
     await expect(settings.getByLabel("С заявкой: хранить дней", { exact: true })).toHaveValue("0");
     await settings.getByLabel("Без заявки: хранить дней", { exact: true }).fill("21");
     await settings.getByLabel("С заявкой: хранить дней", { exact: true }).fill("90");
-    await settings.getByLabel("Поле AppMetrica profileId", { exact: true }).selectOption("id");
     await settings.getByLabel("Post API key", { exact: true }).fill("browser-fake-appmetrica-key");
     await settings.getByRole("button", { name: "Добавить провайдера", exact: true }).click();
     const provider = settings.locator('.pl-provider').last();
@@ -52,7 +51,6 @@ test("partner settings use native top navigation and profile field selector", as
     await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
     await expect(settings.getByRole("status")).toHaveText("Настройки сохранены.");
     const cfg = await page.evaluate(() => app.pb.send("/api/partnerlinks/admin/config"));
-    expect(cfg.profileIdField).toBe("id");
     expect(cfg).toMatchObject({ pendingRetentionDays: 21, conversionRetentionDays: 90 });
     expect(cfg.hasPostApiKey && !cfg.postApiKey && cfg.providers.every(p => p.hasSecret && !p.secret)).toBe(true);
     expect(cfg.providers.at(-1)).toMatchObject({ sendRevenue: true, revenueStatus: "hold", secretLocation: "body", secretName: "auth.secret", statuses: { "1": "approved" }, extraFields: { offerId: "data.offer_id" } });
@@ -94,7 +92,6 @@ test("partner settings use native top navigation and profile field selector", as
     await expect(page.getByRole("link", { name: "Партнёрские ссылки", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.reload();
-    await expect(settings.getByLabel("Поле AppMetrica profileId", { exact: true })).toHaveValue("id");
     await expect(settings.getByLabel("Без заявки: хранить дней", { exact: true })).toHaveValue("21");
     await expect(settings.getByLabel("С заявкой: хранить дней", { exact: true })).toHaveValue("90");
     await provider.locator(':scope > summary').click();
@@ -200,9 +197,9 @@ test("conversations expose only native record preview and no Variants", async ({
     const record = await page.evaluate(async () => {
         await app.pb.collection('_superusers').authWithPassword('browser@example.test', 'browser-test-password-123');
         const config = await app.pb.send('/api/partnerlinks/admin/config');
-        await app.pb.send('/api/partnerlinks/admin/config', { method: 'PUT', body: { ...config, baseUrl: 'https://links.example.test', applicationId: 1234, postApiKey: 'fake-browser-key', profileIdField: 'id' } });
+        await app.pb.send('/api/partnerlinks/admin/config', { method: 'PUT', body: { ...config, baseUrl: 'https://links.example.test', applicationId: 1234, postApiKey: 'fake-browser-key' } });
         const user = new app.pb.constructor(app.pb.baseURL);
-        await user.collection('demo_members').authWithPassword('default@variants.test', 'demo-variants-123');
+        await user.collection('users').authWithPassword('default@variants.test', 'demo-variants-123');
         const link = await user.collection('partner_links').getFirstListItem('provider = "demo"');
         const issued = await user.send(`/api/partnerlinks/links/${link.id}/resolve`, { method: 'POST', body: {} });
         const row = await user.collection('conversations').getFirstListItem(`clickId = "${issued.clickId}"`);
@@ -245,7 +242,7 @@ test("user picker search preserves width, focus and results while typing", async
       await page.setViewportSize({ width, height: 900 });
       for (const theme of ['light', 'dark']) {
         await page.evaluate(theme => app.store.userColorScheme = theme, theme);
-        await page.evaluate(() => app.modals.openRecordsPicker({ collection: 'demo_members', maxSelect: 1, onselect: () => {} }));
+        await page.evaluate(() => app.modals.openRecordsPicker({ collection: 'users', maxSelect: 1, onselect: () => {} }));
         const modal = page.locator('.records-picker-modal');
         await expect(modal).toBeVisible();
         const search = modal.locator('.editor-content');

@@ -21,21 +21,10 @@ class DemoModel extends ChangeNotifier {
 
   List<RecordModel> offers = const [];
   List<RecordModel> orders = const [];
-  bool signedIn = false;
   bool busy = false;
   String? error;
 
-  Future<void> initialize() => _run(() async {
-    await repository.initialize();
-    signedIn = true;
-    await _load();
-  });
-
-  Future<void> login(String email, String password) => _run(() async {
-    await repository.login(email.trim(), password);
-    signedIn = true;
-    await _load();
-  });
+  Future<void> load() => _run(_load);
 
   Future<void> refresh() => _run(() async {
     await _load();
@@ -83,13 +72,4 @@ class DemoModel extends ChangeNotifier {
     error = 'Не удалось открыть ссылку. Разрешите всплывающие окна в браузере.';
     notifyListeners();
   }
-
-  Future<void> logout() => _run(() async {
-    offers = const [];
-    orders = const [];
-    signedIn = false;
-    await repository.logout();
-    signedIn = true;
-    await _load();
-  });
 }

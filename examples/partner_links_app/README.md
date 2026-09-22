@@ -19,13 +19,19 @@ cd examples/partner_links_app
 fvm flutter run -d chrome
 ```
 
-Для Android-эмулятора:
+В VS Code выберите запущенный эмулятор и конфигурацию **Flutter: пример приложения**, затем F5. Перед запуском автоматически пробрасываются порты `8090` (PocketBase) и `8091` (демопартнёр). Требуется Node.js и Android SDK; скрипт ищет `adb` в `ANDROID_HOME`, `ANDROID_SDK_ROOT`, стандартных каталогах SDK и PATH. Для iOS/web проброс не требуется.
+
+Для Android-эмулятора из терминала (первую команду выполните из корня репозитория):
 
 ```sh
-fvm flutter run --dart-define=POCKETBASE_URL=http://10.0.2.2:8090
+node tools/android-demo-ports.mjs
+cd examples/partner_links_app
+fvm flutter run
 ```
 
-Для iOS Simulator используйте `http://localhost:8090`. Для физического устройства укажите доступный ему HTTPS-адрес сервера и выберите собственную signing team в Xcode. В Android debug разрешён локальный HTTP, в iOS — local networking; release-настройки безопасности приложения определяйте отдельно. Публичный Base URL плагина также должен быть доступен устройству.
+При пробросе оставьте `http://127.0.0.1:8090` в приложении и Base URL плагина, а `http://127.0.0.1:8091/click` — у демо-оффера. Без проброса Android считает `127.0.0.1` адресом самого эмулятора. После перезапуска эмулятора повторите команду или запуск через F5. Для конкретного Android-устройства можно задать `ANDROID_SERIAL`.
+
+Для iOS Simulator подходит тот же `http://127.0.0.1:8090`. Для физического устройства без USB-проброса укажите доступный ему HTTPS-адрес сервера и выберите собственную signing team в Xcode. В Android debug разрешён локальный HTTP, в iOS — local networking; release-настройки безопасности приложения определяйте отдельно. Публичный Base URL плагина также должен быть доступен устройству.
 
 Предзаполнен публичный демопользователь `default@variants.test` / `demo-variants-123`. Другие пользователи из Go example подходят для проверки Variants. На Android/iOS сессия и пароль гостя сохраняются в защищённом хранилище; web-пример хранит их только в памяти. При выходе создаётся новый гость.
 
@@ -36,9 +42,9 @@ fvm flutter run --dart-define=POCKETBASE_URL=http://10.0.2.2:8090
 3. В `partner_links` задайте реальный URL и провайдера. Общие режим и предупреждение меняются в `dynamic_link_settings` отдельно для каждого набора Variants.
 4. Пришедшие постбеки обновят `conversations`; нажмите «Обновить» в примере. Запись создаётся при выдаче ссылки; пример показывает только записи после первого постбека (`status != "pending"`). ID заявки обязателен для Revenue.
 
-Интеграцией владеет [pocket_mfo_flutter](../../packages/pocket_mfo_flutter/README.md). Для настоящей аналитики Android/iOS передайте `--dart-define=APPMETRICA_SDK_KEY=YOUR_CLIENT_KEY`. Без ключа и в web работает PreviewAnalytics, который не отправляет события. Post API key остаётся на сервере. Кнопка «Отправить тестовое событие» вызывает `PocketMfo.reportEvent`; текущий пользователь и карта экспериментов отображаются на экране.
+Интеграцией владеет [pocket_mfo_flutter](../../packages/pocket_mfo_flutter/README.md). На Android/iOS по умолчанию подключён клиентский SDK key приложения AppMetrica 6361870, поэтому достаточно обычного `fvm flutter run`. Для другого приложения переопределите ключ через `--dart-define=APPMETRICA_SDK_KEY=YOUR_CLIENT_KEY`. В web или при явно пустом `--dart-define=APPMETRICA_SDK_KEY=` работает PreviewAnalytics, который не отправляет события. Post API key остаётся на сервере. Кнопка «Отправить тестовое событие» вызывает `PocketMfo.reportEvent`; текущий пользователь и карта экспериментов отображаются на экране.
 
-Пуши включаются на Android/iOS при наличии SDK key. Google-файлы относятся к `dev.appbase.example`; при замене выполните `fvm dart run app_messaging_flutter:configure`. Разрешение запрашивается кнопкой «Разрешить уведомления», автоматического запроса при старте нет.
+Пуши включаются на Android/iOS при наличии SDK key. Google-файлы относятся к `dev.appbase.example`; при замене выполните `fvm dart run app_messaging_flutter:configure`. В примере включён `requestPermissionOnStart: true`: разрешение запрашивается автоматически после инициализации. Кнопка «Разрешить уведомления» позволяет запросить его вручную. Повторный показ системного диалога зависит от текущего статуса разрешения в ОС.
 
 Payload `{"type":"route","url":"/orders"}` открывает заказы; `/offers` возвращает к офферам. Payload `{"type":"partner","id":"demopartner0001"}` получает ссылку и открывает её через существующий PushLinkResolver. Холодный запуск ждёт гостевой авторизации и корневого Navigator. Ошибка разрешения партнёрской ссылки сохраняет текущий экран.
 
@@ -58,3 +64,7 @@ fvm flutter build web --no-web-resources-cdn
 ```
 
 После web-сборки из корня `npm run test:flutter` проверяет Chromium с временным PocketBase: автоматический гостевой старт, обычный вход, событие, офферы, заказы, ошибку resolve без настройки AppMetrica и выход. Пользовательская база не затрагивается.
+
+## Проверка с демо партнёром
+
+Запустите оба сервиса командой `docker compose -f example/compose.yaml up -d --build` из корня репозитория. Миграция направит стандартный демо-оффер в [кабинет партнёра](../../example/demopartner/README.md). После открытия оффера браузер перейдёт на Google; на http://127.0.0.1:8091 можно изменить статус и отправить постбек. В PocketBase используйте свои реальные ключи AppMetrica. Для Android-эмулятора используйте проброс обоих портов, описанный выше.

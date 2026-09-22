@@ -68,7 +68,7 @@ await mfo.dispose();
 
 ## Пуши
 
-Передайте `PocketMfoPushConfig(navigatorKey: navigatorKey, onNavigate: ...)` и тот же ключ корневому `MaterialApp`/router. `onNavigate` обрабатывает прикладные пути, например `/orders`. Firebase/APNs и нативную часть настройте по [Messaging](../app_messaging_flutter/README.md). Пуши опциональны, запрос разрешения по умолчанию выключен; доступен `mfo.messaging?.requestPermission()`.
+Передайте `PocketMfoPushConfig(navigatorKey: navigatorKey, onNavigate: ...)` и тот же ключ корневому `MaterialApp`/router. `onNavigate` обрабатывает прикладные пути, например `/orders`. Firebase/APNs и нативную часть настройте по [Messaging](../app_messaging_flutter/README.md). Пуши опциональны. Для автоматического запроса разрешения передайте `requestPermissionOnStart: true` в `PocketMfoPushConfig`: запрос выполняется после инициализации Messaging один раз на экземпляр, включая параллельные вызовы `initialize`. По умолчанию параметр `false`; вручную доступен `mfo.messaging?.requestPermission()`. В запускаемом примере автоматический запрос включён.
 
 Действие холодного запуска ждёт авторизации и готового Navigator. Партнёрские действия используют существующий [PushLinkResolver](../push_links_flutter/README.md). `dispose()` удаляет подписки и запрещает отложенную навигацию. Не вызывайте методы изменения SDK профиля через Messaging параллельно фасаду.
 

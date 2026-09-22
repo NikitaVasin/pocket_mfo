@@ -35,12 +35,19 @@ func register(app core.App, options Options, client *http.Client) {
 	polymorphicrelation.Register(app, polymorphicrelation.Options{SystemCollections: []string{ConversationsCollection}})
 	options.AuthCollections = slices.Clone(options.AuthCollections)
 	options.VariantCollections = slices.Clone(options.VariantCollections)
+	setManaged(app, options.Managed)
+	app.Store().Set(adminLockStoreKey, options.LockAdminConfig)
 	p := &plugin{options: options, client: client}
 	app.OnBootstrap().Bind(&hook.Handler[*core.BootstrapEvent]{Id: "partnerlinks", Func: func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
 			return err
 		}
-		return install(e.App)
+		return e.App.RunInTransaction(func(tx core.App) error {
+			if err := install(tx); err != nil {
+				return err
+			}
+			return validateManaged(tx)
+		})
 	}})
 	protectRecord := func(e *core.RecordEvent) error {
 		if e.Record.Collection().Name == configsCollection && !internal(e.Context) {
@@ -114,6 +121,9 @@ func register(app core.App, options Options, client *http.Client) {
 		return e.Next()
 	}})
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{Id: "partnerlinks", Func: func(e *core.ServeEvent) error {
+		if err := validateManaged(e.App); err != nil {
+			return err
+		}
 		if err := installConversations(e.App, options.AuthCollections); err != nil {
 			return err
 		}
@@ -163,18 +173,23 @@ func register(app core.App, options Options, client *http.Client) {
 			if err != nil {
 				return err
 			}
-			return r.JSON(200, redacted(*c))
+			r.Response.Header().Set("Cache-Control", "no-store")
+			return r.JSON(200, adminSettings(r.App, *c))
 		}).Bind(apis.RequireSuperuserAuth())
 		e.Router.PUT("/api/partnerlinks/admin/config", func(r *core.RequestEvent) error {
-			var c Config
+			if r.App.Store().Get(adminLockStoreKey) == true {
+				return r.ForbiddenError("Настройки доступны только для просмотра: LockAdminConfig включён в Go-коде", nil)
+			}
+			var c adminConfig
 			if err := decodeBody(r, &c); err != nil {
 				return r.BadRequestError("Некорректные настройки", nil)
 			}
-			result, err := Configure(r.App, c)
+			result, err := Configure(r.App, c.Config)
 			if err != nil {
 				return r.BadRequestError(err.Error(), nil)
 			}
-			return r.JSON(200, redacted(*result))
+			r.Response.Header().Set("Cache-Control", "no-store")
+			return r.JSON(200, adminSettings(r.App, *result))
 		}).Bind(apis.RequireSuperuserAuth())
 		e.Router.POST("/api/partnerlinks/links/{id}/resolve", p.resolve).Bind(apis.RequireAuth())
 		e.Router.GET("/api/partnerlinks/r/{token}", p.redirect)

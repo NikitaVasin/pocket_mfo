@@ -52,7 +52,7 @@ test("partner settings use native top navigation and profile field selector", as
     await expect(settings.getByRole("status")).toHaveText("Настройки сохранены.");
     const cfg = await page.evaluate(() => app.pb.send("/api/partnerlinks/admin/config"));
     expect(cfg).toMatchObject({ pendingRetentionDays: 21, conversionRetentionDays: 90 });
-    expect(cfg.hasPostApiKey && !cfg.postApiKey && cfg.providers.every(p => p.hasSecret && !p.secret)).toBe(true);
+    expect(cfg.hasPostApiKey && !cfg.postApiKey && cfg.providers.every(p => p.hasSecret && p.secret)).toBe(true);
     expect(cfg.providers.at(-1)).toMatchObject({ sendRevenue: true, revenueStatus: "hold", secretLocation: "body", secretName: "auth.secret", statuses: { "1": "approved" }, extraFields: { offerId: "data.offer_id" } });
     await provider.locator(':scope > summary').click(); // may already be expanded after save
     if (!(await provider.evaluate(el => el.open))) await provider.locator(':scope > summary').click();
@@ -352,4 +352,92 @@ test("provider selector explains empty configuration and retries loading errors"
     await open();
     await expect(field).toContainText("Сначала добавьте и сохраните провайдера");
     await expect(field.locator('.selected-container')).toBeDisabled();
+});
+
+test("Rafinad preset supplies visible secret, mappings and setup guide", async ({ page }, testInfo) => {
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto("/_/");
+    await page.waitForFunction(() => window.app?.store?._ready);
+    await page.evaluate(async () => {
+        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
+        location.hash = "#/partner-links";
+    });
+    const settings = page.locator('[data-pb="pagePartnerLinks"]');
+    await settings.getByRole("button", { name: "Добавить провайдера", exact: true }).click();
+    const provider = settings.locator('.pl-provider').last();
+    const id = `rafinad-${Date.now()}`;
+    await provider.getByLabel("ID провайдера", { exact: true }).fill(id);
+    await provider.getByLabel("Пресет партнёра", { exact: true }).selectOption("rafinad_new");
+    await expect(provider.getByLabel("Название провайдера", { exact: true })).toHaveValue("Rafinad New");
+    await expect(provider.getByLabel("ID провайдера", { exact: true })).toHaveValue(id);
+    await expect(provider.getByLabel("Шаблон ссылки", { exact: true })).toHaveValue("{url}?p_click_id={clickData}");
+    const secret = provider.getByLabel("Секрет постбека", { exact: true });
+    await expect(secret).toHaveAttribute("type", "text");
+    const value = await secret.inputValue();
+    expect(value).toMatch(/^[0-9a-f]{48}$/);
+    await expect(provider.locator('.pl-preset-guide')).toContainText(value);
+    await expect(provider.locator('.pl-preset-guide')).toContainText(`/api/partnerlinks/postbacks/${id}`);
+    await expect(provider.locator('.pl-preset-table')).toContainText("{publisher_commission}");
+    await expect(provider.locator('.pl-preset-guide')).toContainText("Одобрено = 4");
+    await expect(provider.getByLabel("Передавать доход в Revenue", { exact: true })).not.toBeChecked();
+    await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
+    await expect(settings.getByRole("status")).toHaveText("Настройки сохранены.");
+    await page.reload();
+    await provider.locator(':scope > summary').click();
+    await expect(secret).toHaveValue(value);
+    const config = await page.evaluate(() => app.pb.send("/api/partnerlinks/admin/config"));
+    expect(config.providers.at(-1)).toMatchObject({ preset: "rafinad_new", id, statuses: { "1": "lead", "2": "hold", "3": "rejected", "4": "approved" } });
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const theme of ["light", "dark"]) {
+            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+            expect(await settings.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await provider.locator('.pl-preset-guide').screenshot({ path: `test-results/rafinad-${testInfo.project.name}-${theme}-${width}.png`, animations: "disabled" });
+        }
+    }
+    await provider.getByLabel("clickData", { exact: true }).fill("custom_token");
+    await expect(provider.locator('.pl-preset-guide')).toContainText("Поля пресета изменены");
+    expect(errors).toEqual([]);
+});
+
+test("managed settings and full admin lock disable editing but keep guide readable", async ({ page }) => {
+    let fullLock = false;
+    await page.route('**/api/partnerlinks/admin/config', async route => {
+        const response = await route.fetch();
+        const config = await response.json();
+        const preset = config.presets.find(p => p.id === "rafinad_new");
+        config.providers = [{ ...preset.provider, id: "code-rafinad", secret: "code-partner-visible-secret" }];
+        config.locks = { all: fullLock, fields: ["applicationId", "postApiKey"], eventNames: ["lead"], providers: ["code-rafinad"] };
+        await route.fulfill({ response, json: config });
+    });
+    await page.goto("/_/");
+    await page.waitForFunction(() => window.app?.store?._ready);
+    await page.evaluate(async () => {
+        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
+        location.hash = "#/partner-links";
+    });
+    const settings = page.locator('[data-pb="pagePartnerLinks"]');
+    await expect(settings.getByLabel("Application ID", { exact: true })).toBeDisabled();
+    await expect(settings.getByLabel("Post API key", { exact: true })).toBeDisabled();
+    await expect(settings.getByLabel("Публичный URL сервера", { exact: true })).toBeEnabled();
+    await settings.getByText("Дополнительно: собственные имена событий", { exact: true }).click();
+    await expect(settings.getByLabel("Заявка создана (лид)", { exact: true })).toBeDisabled();
+    await expect(settings.getByLabel("Клик по офферу", { exact: true })).toBeEnabled();
+    const provider = settings.locator('.pl-provider');
+    await provider.locator(':scope > summary').click();
+    await expect(provider.getByLabel("Пресет партнёра", { exact: true })).toBeDisabled();
+    await expect(provider.getByLabel("Секрет постбека", { exact: true })).toHaveValue("code-partner-visible-secret");
+    await expect(provider.getByLabel("Секрет постбека", { exact: true })).toBeDisabled();
+    await expect(provider.getByRole("button", { name: "Убрать провайдера", exact: true })).toBeDisabled();
+    await expect(provider.locator('.pl-preset-guide')).toContainText("code-partner-visible-secret");
+    await expect(settings.getByRole("button", { name: "Добавить провайдера", exact: true })).toBeEnabled();
+    fullLock = true;
+    await page.reload();
+    await expect(settings.getByRole("status")).toContainText("только для просмотра");
+    await expect(settings.getByLabel("Публичный URL сервера", { exact: true })).toBeDisabled();
+    await expect(settings.getByRole("button", { name: "Добавить провайдера", exact: true })).toBeDisabled();
+    await expect(settings.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeDisabled();
+    await provider.locator(':scope > summary').click();
+    await expect(provider.locator('.pl-preset-guide')).toBeVisible();
 });

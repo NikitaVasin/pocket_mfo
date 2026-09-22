@@ -196,8 +196,8 @@ func expiredConversation(r *core.Record, c *Config, now int64) bool {
 	return days > 0 && now >= start+int64(days)*86400
 }
 
-func collect(app core.App, token, status string, timestamp int64, conversion map[string]any) error {
-	lead, _ := conversion["leadId"].(string)
+func collect(app core.App, token string, timestamp int64, conversion conversionData) error {
+	lead, status := conversion.LeadID, conversion.Status
 	return app.RunInTransaction(func(tx core.App) error {
 		r, data, err := loadConversation(tx, token)
 		if err != nil {
@@ -243,10 +243,13 @@ func collect(app core.App, token, status string, timestamp int64, conversion map
 		if lead != "" {
 			r.Set("leadId", lead)
 		}
-		for _, key := range []string{"eventId", "amount", "currency", "extra"} {
-			if value, ok := conversion[key]; ok {
+		for key, value := range map[string]string{"eventId": conversion.EventID, "amount": conversion.Amount, "currency": conversion.Currency} {
+			if value != "" {
 				r.Set(key, value)
 			}
+		}
+		if len(conversion.Extra) > 0 {
+			r.Set("extra", conversion.Extra)
 		}
 		return save(tx, r)
 	})

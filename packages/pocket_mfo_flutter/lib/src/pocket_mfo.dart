@@ -132,8 +132,9 @@ final class PocketMfo with WidgetsBindingObserver {
     if (!_disposed) onError?.call(error, stack);
   }
 
-  void _noticeIdentity() {
-    final record = user;
+  void _noticeIdentity() => _trackIdentity(user);
+
+  void _trackIdentity(RecordModel? record) {
     final identity = record == null
         ? ''
         : '${record.collectionId}/${record.id}';
@@ -178,9 +179,12 @@ final class PocketMfo with WidgetsBindingObserver {
       }
     }
     _noticeIdentity();
-    _authSubscription = pocketBase.authStore.onChange.listen((_) {
+    _authSubscription = pocketBase.authStore.onChange.listen((event) {
       if (_disposed) return;
       try {
+        // AuthStore delivers events asynchronously. A clear/save pair can
+        // already have restored the same user when the clear event arrives.
+        _trackIdentity(event.record);
         _noticeIdentity();
         if (_ready) {
           unawaited(
@@ -210,6 +214,9 @@ final class PocketMfo with WidgetsBindingObserver {
     );
   }
 
+  /// Restores the saved session or signs in a guest with SDK-generated credentials.
+  /// The application only awaits readiness; no email, ID or password is required.
+  /// Concurrent calls share initialization and do not create additional guests.
   Future<void> initialize() {
     _alive();
     if (_ready) return Future.value();
@@ -440,9 +447,12 @@ final class PocketMfo with WidgetsBindingObserver {
     await initialize();
     return _serial(() async {
       if (!_valid) throw const PocketMfoAuthRequired();
-      final id = user!.id;
+      _noticeIdentity();
+      final epoch = _epoch;
       final result = await pocketBase.resolvePartnerLink(linkId: linkId);
-      if (_disposed || user?.id != id) throw const PocketMfoAuthRequired();
+      if (_disposed || !_valid) throw const PocketMfoAuthRequired();
+      _noticeIdentity();
+      if (_epoch != epoch) throw const PocketMfoAuthRequired();
       return result;
     });
   }

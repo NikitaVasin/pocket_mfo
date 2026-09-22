@@ -17,3 +17,9 @@ final opened = await link.open(context);
 Заголовки кнопок warning dialog берутся из `MaterialLocalizations`. Встроенный
 WebView используется на Android и iOS; на остальных платформах `appView`
 безопасно переключается на системный in-app browser.
+
+Cookies хранит нативный WebView с исходными атрибутами защиты и сроком действия.
+Копии из `document.cookie` больше не сохраняются и не восстанавливаются;
+старые копии в preferences удаляются при открытии WebView. `saveCooke`
+сохранён для совместимости, но не включает приватный режим: для удаления
+веб-сессии вызывай `clearDynamicLinkWebData()`.

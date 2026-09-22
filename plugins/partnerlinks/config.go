@@ -21,8 +21,16 @@ func save(app core.App, model core.Model) error {
 }
 func internal(ctx context.Context) bool { return ctx != nil && ctx.Value(internalKey{}) == true }
 
-// Load returns secrets to trusted Go code. HTTP callers receive a redacted copy.
+// Load returns effective settings, including overrides and secrets from Go code.
 func Load(app core.App) (*Config, error) {
+	c, err := loadStored(app)
+	if err == nil {
+		overlayManaged(c, managed(app))
+	}
+	return c, err
+}
+
+func loadStored(app core.App) (*Config, error) {
 	r, err := app.FindRecordById(configsCollection, configID)
 	if errors.Is(err, sql.ErrNoRows) {
 		c := DefaultConfig()
@@ -34,6 +42,9 @@ func Load(app core.App) (*Config, error) {
 	c := DefaultConfig()
 	if err = json.Unmarshal([]byte(r.GetString("definition")), &c); err != nil {
 		return nil, err
+	}
+	if c.Providers == nil {
+		c.Providers = []Provider{}
 	}
 	defaultRevenueStatuses(&c)
 	return &c, nil
@@ -52,6 +63,10 @@ func Configure(app core.App, c Config) (*Config, error) {
 		return nil, err
 	}
 	err = app.RunInTransaction(func(tx core.App) error {
+		raw, err := loadStored(tx)
+		if err != nil {
+			return err
+		}
 		old, err := Load(tx)
 		if err != nil {
 			return err
@@ -73,6 +88,9 @@ func Configure(app core.App, c Config) (*Config, error) {
 			p.HasSecret = false
 		}
 		if err = validateConfig(&c); err != nil {
+			return err
+		}
+		if err = checkManaged(&c, old, managed(tx)); err != nil {
 			return err
 		}
 		for _, p := range old.Providers {
@@ -98,7 +116,7 @@ func Configure(app core.App, c Config) (*Config, error) {
 			return err
 		}
 		c.Version++
-		r.Set("definition", c)
+		r.Set("definition", storedConfig(c, raw, managed(tx)))
 		return save(tx, r)
 	})
 	if err != nil {
@@ -108,12 +126,12 @@ func Configure(app core.App, c Config) (*Config, error) {
 }
 
 func redacted(c Config) Config {
-	// Load/Configure own this instance; HTTP must never return plaintext secrets.
+	// Only the dedicated superuser API exposes partner secrets. The AppMetrica
+	// Post API key remains write-only in the administrative interface.
 	c.HasPostAPIKey = c.PostAPIKey != ""
 	c.PostAPIKey = ""
 	for i := range c.Providers {
 		c.Providers[i].HasSecret = c.Providers[i].Secret != ""
-		c.Providers[i].Secret = ""
 	}
 	return c
 }
@@ -202,6 +220,9 @@ func validateConfig(c *Config) error {
 	}
 	ids := map[string]bool{}
 	for _, p := range c.Providers {
+		if p.Preset != "" && p.Preset != PresetRafinadNew {
+			return fmt.Errorf("partnerlinks: unknown provider preset")
+		}
 		if p.RevenueStatus != "approved" && p.RevenueStatus != "hold" {
 			return fmt.Errorf("partnerlinks: revenueStatus must be approved or hold")
 		}

@@ -40,3 +40,12 @@
 /* Native collection controls; server checks remain authoritative. */
 .pl-conversations-active .page-header-primary-btns .new-record-btn,
 .pl-conversations-active .btn-collection-settings { display: none !important; }
+
+fieldset.pl-provider-body { min-width: 0; margin: 0; padding: 0; border: 0; }
+.pl-managed-note { color: var(--surfaceTxtColor); }
+.pl-settings :disabled { cursor: not-allowed; opacity: 0.65; }
+.pl-preset-guide { overflow-wrap: anywhere; }
+.pl-preset-guide ol { padding-left: 24px; margin: 0; }
+.pl-preset-guide li + li { margin-top: 12px; }
+.pl-preset-table { width: 100%; table-layout: fixed; margin-top: 12px; border-collapse: collapse; }
+.pl-preset-table th, .pl-preset-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--surfaceAlt3Color); overflow-wrap: anywhere; }

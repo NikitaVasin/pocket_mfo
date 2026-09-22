@@ -17,6 +17,25 @@ const configID = "partnerconfig01"
 type Options struct {
 	AuthCollections    []string
 	VariantCollections []string
+	Managed            *ManagedConfig
+	// LockAdminConfig makes all settings read-only through HTTP, even for
+	// superusers. Trusted Go code can still Configure editable settings.
+	LockAdminConfig bool
+}
+
+// ManagedConfig overrides stored settings for this process. Non-nil fields,
+// supplied event names and entire providers with the supplied IDs are read-only
+// in Configure and the admin API. Unspecified settings remain editable.
+// Use pointers to explicitly manage zero/empty scalar values.
+type ManagedConfig struct {
+	BaseURL                 *string           `json:"baseUrl,omitempty"`
+	ApplicationID           *int64            `json:"applicationId,omitempty"`
+	PostAPIKey              *string           `json:"postApiKey,omitempty"`
+	OpenTTLSeconds          *int64            `json:"openTtlSeconds,omitempty"`
+	PendingRetentionDays    *int              `json:"pendingRetentionDays,omitempty"`
+	ConversionRetentionDays *int              `json:"conversionRetentionDays,omitempty"`
+	EventNames              map[string]string `json:"eventNames,omitempty"`
+	Providers               []Provider        `json:"providers,omitempty"`
 }
 
 type Config struct {
@@ -33,6 +52,7 @@ type Config struct {
 }
 
 type Provider struct {
+	Preset         string            `json:"preset,omitempty"`
 	RevenueStatus  string            `json:"revenueStatus"`
 	SendRevenue    bool              `json:"sendRevenue"`
 	ID             string            `json:"id"`

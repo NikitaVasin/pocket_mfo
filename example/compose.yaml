@@ -6,8 +6,23 @@ services:
       dockerfile: example/Dockerfile
     ports:
       - "127.0.0.1:${POCKETBASE_PORT:-8090}:8090"
+    environment:
+      DEMO_PUBLIC_URL: "${DEMO_PUBLIC_URL:-http://127.0.0.1:${POCKETBASE_PORT:-8090}}"
+      DEMO_PARTNER_PUBLIC_URL: "${DEMO_PARTNER_PUBLIC_URL:-http://127.0.0.1:${DEMO_PARTNER_PORT:-8091}}"
     volumes:
       - pb_data:/pb_data
     restart: unless-stopped
+  demo-partner:
+    build:
+      context: ..
+      dockerfile: example/demopartner/Dockerfile
+    ports:
+      - "127.0.0.1:${DEMO_PARTNER_PORT:-8091}:8091"
+    environment:
+      POSTBACK_URL: "http://pocketbase:8090/api/partnerlinks/postbacks/demo"
+    volumes:
+      - partner_data:/data
+    restart: unless-stopped
 volumes:
   pb_data:
+  partner_data:

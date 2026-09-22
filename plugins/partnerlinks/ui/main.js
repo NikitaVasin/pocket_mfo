@@ -1,5 +1,5 @@
 // PocketBase v0.40.4 UI extension; authorization is enforced on the server.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=4" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=5" }));
 const settingsPath = "#/partner-links";
 app.store.headerLinks = [...app.store.headerLinks, { label: "Партнёрские ссылки", href: settingsPath, icon: "ri-links-line" }];
 app.routes.superuserOnly(settingsPath, () => t.div({ className: "page" }, partnerSettingsContent()));
@@ -73,14 +73,21 @@ function partnerSettingsContent() {
     const expandedProviders = new Map();
     const statusChoices = [["lead", "Заявка создана (лид)"], ["approved", "Подтверждение"], ["hold", "Холд / ожидание"], ["rejected", "Отказ"]];
     const eventLabels = { click: "Клик по офферу", lead: "Заявка создана (лид)", approved: "Подтверждение", hold: "Холд / ожидание", rejected: "Отказ" };
-    const button = (label, action, secondary = true) => t.button({ type: "button", className: `btn ${secondary ? "secondary" : ""}`, disabled: () => state.saving, onclick: action }, label);
+    const button = (label, action, secondary = true) => t.button({ type: "button", className: `btn ${secondary ? "secondary" : ""}`, disabled: () => state.saving || !!state.config?.locks?.all, onclick: action }, label);
     const message = error => error?.response?.message || error?.message || "Не удалось выполнить запрос";
     function field(label, object, key, { type = "text", hint = "", required = false, choices = null, placeholder = "" } = {}) {
+        const locked = !!state.config?.locks?.all ||
+            (object === state.config && state.config.locks?.fields?.includes(key)) ||
+            (object === state.config?.eventNames && state.config.locks?.eventNames?.includes(key));
+        if (locked) {
+            const original = hint;
+            hint = () => `Задано в Go-коде. ${typeof original === "function" ? original() : original}`;
+        }
         const id = `pl-input-${++sequence}`;
         const update = event => { object[key] = type === "number" ? Number(event.target.value) : event.target.value; };
         const control = choices
-            ? t.select({ id, required, ariaDescribedby: hint ? `${id}-help` : undefined, value: () => object[key], onchange: update }, choices.map(([value, text]) => t.option({ value }, text)))
-            : t.input({ id, type, required, ariaDescribedby: hint ? `${id}-help` : undefined, placeholder, min: type === "number" ? 0 : undefined, autocomplete: type === "password" ? "new-password" : "off", value: () => object[key] ?? "", oninput: update });
+            ? t.select({ id, required, disabled: locked, ariaDescribedby: hint ? `${id}-help` : undefined, value: () => object[key], onchange: update }, choices.map(([value, text]) => t.option({ value }, text)))
+            : t.input({ id, type, required, disabled: locked, ariaDescribedby: hint ? `${id}-help` : undefined, placeholder, min: type === "number" ? 0 : undefined, autocomplete: type === "password" ? "new-password" : "off", value: () => object[key] ?? "", oninput: update });
         return t.div({ className: "pl-field" }, t.label({ className: "pl-label", htmlFor: id }, label), t.div({ className: "field pl-control" }, control),
             hint ? t.div({ id: `${id}-help`, className: "field-help pl-wrap" }, hint) : null);
     }
@@ -103,6 +110,7 @@ function partnerSettingsContent() {
     }
     function serialize() {
         const copy = JSON.parse(JSON.stringify(state.config));
+        delete copy.locks; delete copy.presets;
         copy.providers = copy.providers.map(({ _statusRows, _extraRows, ...provider }) => ({ ...provider,
             statuses: rowMap(_statusRows, "Соответствие статусов"), extraFields: rowMap(_extraRows, "Дополнительные параметры") }));
         return copy;
@@ -117,7 +125,7 @@ function partnerSettingsContent() {
         finally { state.loading = false; }
     }
     async function saveSettings(event) {
-        event.preventDefault(); if (state.saving) return;
+        event.preventDefault(); if (state.saving || state.config.locks?.all) return;
         state.saving = true; state.error = ""; state.notice = "";
         try {
             state.config = prepare(await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: serialize() }));
@@ -153,10 +161,55 @@ function partnerSettingsContent() {
                 t.button({ type: "button", className: "btn secondary pl-remove", title: "Удалить параметр", ariaLabel: `Удалить параметр ${index + 1}`, disabled: () => state.saving, onclick: () => provider._extraRows.splice(index, 1) }, t.i({ className: "ri-delete-bin-line", ariaHidden: true }))))),
             button("Добавить параметр", () => provider._extraRows.push({ from: "", to: "" })));
     }
+    function applyPreset(provider, index, presetID) {
+        const preset = state.config.presets?.find(p => p.id === presetID);
+        if (!preset) { provider.preset = ""; return; }
+        const next = JSON.parse(JSON.stringify(preset.provider));
+        next.id = provider.id;
+        next.name = provider.name || preset.name;
+        next.secret = provider.secret || Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, "0")).join("");
+        prepare({ providers: [next] });
+        state.config.providers[index] = next;
+    }
+    function presetSelector(provider, index) {
+        const id = `pl-input-${++sequence}`;
+        return t.div({ className: "pl-field" }, t.label({ className: "pl-label", htmlFor: id }, "Пресет партнёра"),
+            t.div({ className: "field pl-control" }, t.select({ id, value: () => provider.preset || "", onchange: event => applyPreset(provider, index, event.target.value) },
+                t.option({ value: "" }, "Ручная настройка"),
+                (state.config.presets || []).map(preset => t.option({ value: preset.id }, preset.name)))),
+            t.p({ className: "field-help" }, "Выбор пресета заменяет шаблон, поля и статусы. ID, название и введённый секрет сохраняются."));
+    }
+    function presetGuide(provider) {
+        if (provider.preset !== "rafinad_new") return null;
+        const standard = state.config.presets?.find(p => p.id === provider.preset)?.provider;
+        const isStandard = standard && ["urlTemplate", "secretLocation", "secretName"].every(key => provider[key] === standard[key]) &&
+            Object.keys(standard.fields).every(key => provider.fields[key] === standard.fields[key]) &&
+            provider._statusRows.length === 4 && provider._statusRows.every(row => standard.statuses[row.from] === row.to) && !provider._extraRows.length;
+        if (!isStandard) return t.section({ className: "pl-section pl-preset-guide pl-example-note" },
+            t.h4(null, "Настройка Rafinad New"), t.p(null, "Поля пресета изменены. Для стандартной инструкции выберите «Ручная настройка», затем снова «Rafinad New». Либо настройте постбек в кабинете под изменённые поля."));
+        const endpoint = `${state.config.baseUrl || location.origin}/api/partnerlinks/postbacks/${provider.id || "PROVIDER_ID"}`;
+        return t.section({ className: "pl-section pl-preset-guide pl-example-note" },
+            t.h4(null, "Настройка Rafinad New"),
+            t.ol(null,
+                t.li(null, "Заполните ID провайдера и публичный URL сервера, затем сохраните настройки. Секрет уже создан; его можно заменить перед сохранением."),
+                t.li(null, "Откройте new.rafinad.io → Инструменты → Постбеки → Создать. Укажите понятное название, выберите метод GET. В «Ссылка постбека» вставьте:", t.div({ className: "pl-endpoint" }, t.code(null, endpoint))),
+                t.li(null, "В «Фильтрация» выберите нужные оффер и источник. Для всех офферов включите «Глобальный постбек». Если он должен отправляться также при наличии отдельного постбека оффера, включите «Всегда отправлять глобальный постбек». Не настраивайте два постбека на один и тот же адрес — это даст повторные события."),
+                t.li(null, "Отметьте все четыре статуса конверсии. В «Маппинг статусов отправки» задайте: В ожидании = 1, В холде = 2, Отклонено = 3, Одобрено = 4. Здесь 1 создаёт лид, 2 — холд, 3 — отказ, 4 — подтверждение."),
+                t.li(null, "В «Параметры» добавьте строки: слева имя параметра, справа соответствующий макрос Rafinad из списка.",
+                    t.table({ className: "pl-preset-table" }, t.thead(null, t.tr(null, t.th(null, "Имя параметра"), t.th(null, "Макрос Rafinad"))),
+                        t.tbody(null, ["p_click_id", "status", "order_id", "publisher_commission", "currency"].map(key => t.tr(null, t.td(null, t.code(null, key)), t.td(null, t.code(null, `{${key}}`))))))),
+                t.li(null, "В «Константы» добавьте имя secret и его значение:", t.div({ className: "pl-endpoint" }, t.code(null, provider.secret || "Сначала задайте секрет постбека"))),
+                t.li(null, "Сохраните постбек в Rafinad. В нашей коллекции partner_links выберите этого провайдера и вставьте исходную ссылку потока Rafinad в поле link. Параметр p_click_id с токеном сервер добавит сам при переходе."),
+                t.li(null, "Проверьте переход из приложения и постбек по полученному p_click_id: ответ 200 означает успешную отправку события в AppMetrica. Произвольный тестовый токен не подойдёт — сначала нужна выданная приложению ссылка.")),
+            t.p(null, "publisher_commission — ваша комиссия, order_total — сумма заказа и здесь не используется. Даты Rafinad имеют строковый формат, поэтому время берётся при получении постбека. Revenue по умолчанию выключен; при необходимости включите его ниже и выберите статус начисления."));
+    }
     function providerEditor(provider, index) {
         return t.details({ className: "pl-panel pl-provider", open: expandedProviders.get(index) || false, ontoggle: event => expandedProviders.set(index, event.target.open) },
             t.summary(null, () => provider.name || "Новый провайдер"),
-            t.div({ className: "pl-provider-body" },
+            t.fieldset({ className: "pl-provider-body", disabled: !!state.config.locks?.all || state.config.locks?.providers?.includes(provider.id) },
+                state.config.locks?.providers?.includes(provider.id) ? t.p({ className: "pl-managed-note" }, "Провайдер задан в Go-коде. Доступен только просмотр.") : null,
+                presetSelector(provider, index),
+                () => presetGuide(provider),
                 t.section({ className: "pl-section" }, t.h4(null, "1. Ссылка партнёра"),
                     t.div({ className: "pl-grid" },
                         field("Название провайдера", provider, "name", { required: true, hint: "Удобное название партнёрской сети для вас." }),
@@ -167,7 +220,7 @@ function partnerSettingsContent() {
                     t.p({ className: "txt-hint" }, "Постбек — запрос сервера партнёра после создания заявки или изменения её статуса. Передайте партнёру адрес ниже и отдельный секрет. Секрет не должен попадать в ссылку приложения."),
                     t.div({ className: "pl-endpoint" }, t.span(null, "Адрес постбека"), t.code(null, () => `${state.config.baseUrl || location.origin}/api/partnerlinks/postbacks/${provider.id || "PROVIDER_ID"}`)),
                     t.div({ className: "pl-grid" },
-                        field("Секрет постбека", provider, "secret", { type: "password", hint: provider.hasSecret ? "Сохранён. Пустое поле сохраняет текущий секрет. Для замены введите новый и обновите его у партнёра." : "Придумайте случайный секрет не короче 16 символов и передайте партнёру." }),
+                        field("Секрет постбека", provider, "secret", { hint: "Секрет виден суперпользователям. Скопируйте его в кабинет партнёра. Пустое поле при сохранении оставляет текущий секрет. Минимум 16 символов." }),
                         field("Где передавать секрет", provider, "secretLocation", { choices: [["query", "Параметр URL (GET / POST)"], ["header", "HTTP-заголовок (GET / POST)"], ["body", "Тело запроса (POST JSON / form)"]], hint: "Выберите способ, который поддерживает партнёр. Сервер проверяет секрет только в выбранном месте." }),
                         field("Имя параметра / заголовка секрета", provider, "secretName", { required: true, hint: "URL или form: secret. Заголовок: X-Partner-Secret. JSON: secret или вложенный путь auth.secret. Здесь указывается имя поля, а не значение секрета." }))),
                 t.section({ className: "pl-section pl-postback-fields" }, t.h4(null, "3. Поля постбека"),
@@ -219,6 +272,7 @@ function partnerSettingsContent() {
                 () => state.loading ? t.p({ role: "status" }, "Загрузка…") : null,
                 () => !state.config && !state.loading ? button("Повторить загрузку", load) : null,
                 () => state.config ? t.form({ onsubmit: saveSettings },
+                    state.config.locks?.all ? t.div({ className: "alert pl-managed-note", role: "status" }, "Настройки доступны только для просмотра. LockAdminConfig включён в Go-коде.") : null,
                     t.h2(null, "AppMetrica"), t.p({ className: "txt-hint" }, "Здесь настраиваются события и провайдеры. Сами партнёрские ссылки редактируются в коллекции partner_links."),
                     t.div({ className: "pl-grid" },
                         field("Публичный URL сервера", state.config, "baseUrl", { type: "url", hint: "Например https://api.example.com — без /api и /_/. Из него формируются адреса переходов и постбеков." }),
@@ -232,5 +286,5 @@ function partnerSettingsContent() {
                         t.p({ className: "txt-hint" }, "По умолчанию уже заданы стандартные события плагина. Меняйте имена только для совместимости с вашей аналитикой. В AppMetrica они учитываются как пользовательские события. Значения, присылаемые партнёром, настраиваются отдельно в соответствии статусов провайдера."),
                         t.div({ className: "pl-grid" }, Object.keys(state.config.eventNames).map(key => field(eventLabels[key] || key, state.config.eventNames, key, { required: true })))),
                     t.h2(null, "Провайдеры"), () => state.config.providers.map(providerEditor),
-                    t.div({ className: "pl-actions" }, button("Добавить провайдера", newProvider), t.button({ type: "submit", className: "btn", disabled: () => state.saving }, () => state.saving ? "Сохранение…" : "Сохранить настройки"))) : null));
+                    t.div({ className: "pl-actions" }, button("Добавить провайдера", newProvider), t.button({ type: "submit", className: "btn", disabled: () => state.saving || !!state.config.locks?.all }, () => state.saving ? "Сохранение…" : "Сохранить настройки"))) : null));
 }

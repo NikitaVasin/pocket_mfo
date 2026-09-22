@@ -5,7 +5,8 @@
   "scripts": {
     "test:browser": "playwright test",
     "test:docker": "node tests/docker-smoke.mjs",
-    "test:flutter": "node tests/flutter-smoke.mjs"
+    "test:flutter": "node tests/flutter-smoke.mjs",
+    "test:partner": "node tests/demo-partner-smoke.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2"

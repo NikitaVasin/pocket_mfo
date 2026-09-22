@@ -21,6 +21,7 @@ dependencies:
   webview_flutter_android: 4.13.0
 
 dev_dependencies:
+  webview_flutter_platform_interface: 2.15.1
   shared_preferences_platform_interface: ^2.4.1
   flutter_test:
     sdk: flutter

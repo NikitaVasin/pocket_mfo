@@ -27,11 +27,16 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
   final navigatorKey = GlobalKey<NavigatorState>();
   late final PocketMfo integration;
   late final DemoModel model;
+  late Future<Exception?> initialization;
 
   @override
   void initState() {
     super.initState();
-    const sdkKey = String.fromEnvironment('APPMETRICA_SDK_KEY');
+    // Client SDK key for this example; the Post API key stays on the server.
+    const sdkKey = String.fromEnvironment(
+      'APPMETRICA_SDK_KEY',
+      defaultValue: 'fbca87ec-97c5-4df4-b4aa-aed80630f2fa',
+    );
     final preview = kIsWeb || sdkKey.isEmpty;
     integration =
         widget.integration ??
@@ -44,6 +49,7 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
           push: !preview && widget.enableMessaging
               ? PocketMfoPushConfig(
                   navigatorKey: navigatorKey,
+                  requestPermissionOnStart: true,
                   onNavigate: (uri) async {
                     if (!mounted) return;
                     if (uri.path == '/orders') {
@@ -66,9 +72,18 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
               : null,
         );
     model = DemoModel(DemoRepository(integration));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(model.initialize());
-    });
+    initialization = _initialize();
+  }
+
+  // Handle failures immediately, even before FutureBuilder's next frame.
+  Future<Exception?> _initialize() async {
+    try {
+      await integration.initialize();
+      await model.load();
+      return null;
+    } on Exception catch (error) {
+      return error;
+    }
   }
 
   @override
@@ -87,7 +102,47 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
       brightness: Brightness.dark,
       colorSchemeSeed: const Color(0xff315b7c),
     ),
-    home: DemoPage(model: model, integration: integration),
+    home: FutureBuilder<Exception?>(
+      future: initialization,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || snapshot.data != null) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      snapshot.data is ClientException &&
+                              (snapshot.data! as ClientException).statusCode ==
+                                  0
+                          ? 'Сервер ${_DemoPageState.serverUrl} недоступен. '
+                                'Проверьте подключение и проброс портов Android.'
+                          : 'Не удалось инициализировать SDK. Попробуйте ещё раз.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => setState(() {
+                      initialization = _initialize();
+                    }),
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return DemoPage(model: model, integration: integration);
+      },
+    ),
   );
 }
 
@@ -105,16 +160,6 @@ class _DemoPageState extends State<DemoPage> {
     defaultValue: 'http://127.0.0.1:8090',
   );
   DemoModel get model => widget.model;
-  final email = TextEditingController(text: 'default@variants.test');
-  final password = TextEditingController(text: 'demo-variants-123');
-
-  @override
-  void dispose() {
-    email.dispose();
-    password.dispose();
-    super.dispose();
-  }
-
   Future<void> open(String id) async {
     // A fresh token for every tap. No HTTP prefetch and no second click event.
     final result = await model.resolve(id);
@@ -134,18 +179,11 @@ class _DemoPageState extends State<DemoPage> {
       appBar: AppBar(
         title: const Text('Партнёрские ссылки'),
         actions: [
-          if (model.signedIn)
-            IconButton(
-              tooltip: 'Обновить',
-              onPressed: model.busy ? null : model.refresh,
-              icon: const Icon(Icons.refresh),
-            ),
-          if (model.signedIn)
-            IconButton(
-              tooltip: 'Выйти',
-              onPressed: model.busy ? null : model.logout,
-              icon: const Icon(Icons.logout),
-            ),
+          IconButton(
+            tooltip: 'Обновить',
+            onPressed: model.busy ? null : model.refresh,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       body: Align(
@@ -156,7 +194,7 @@ class _DemoPageState extends State<DemoPage> {
             padding: const EdgeInsets.all(24),
             children: [
               Text(serverUrl, style: Theme.of(context).textTheme.bodySmall),
-              if (model.signedIn) ...[
+              ...[
                 Semantics(
                   container: true,
                   child: Text(
@@ -207,36 +245,7 @@ class _DemoPageState extends State<DemoPage> {
                     ),
                   ),
                 ),
-              if (!model.signedIn || widget.integration.isGuest) ...[
-                Text(
-                  'Демонстрационный вход',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: email,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: password,
-                  decoration: const InputDecoration(labelText: 'Пароль'),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: model.busy
-                      ? null
-                      : () => model.login(email.text, password.text),
-                  child: const Text('Войти'),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Используйте пользователей из Go example. AppMetrica получает ID пользователя после входа. profileId всегда равен user.id. Без APPMETRICA_SDK_KEY аналитика работает в режиме предпросмотра.',
-                ),
-              ],
-              if (model.signedIn) ...[
+              ...[
                 Text(
                   'Офферы',
                   style: Theme.of(context).textTheme.headlineSmall,

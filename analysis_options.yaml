@@ -1,0 +1,7 @@
+# Packages keep their own lint rules. Generated native dependencies aren't
+# workspace source and may contain examples with unrelated dependencies.
+analyzer:
+  exclude:
+    - build/**
+    - '**/build/**'
+    - .fvm/**

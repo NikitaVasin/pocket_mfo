@@ -9,6 +9,7 @@ import 'pocket_mfo_test.dart' show Analytics, Backend;
 class LaunchDriver implements MessagingDriver {
   final stream = StreamController<PushAction>.broadcast(sync: true);
   int starts = 0;
+  int permissionRequests = 0;
   bool disposed = false;
   @override
   Stream<PushAction> get actions => stream.stream;
@@ -28,8 +29,11 @@ class LaunchDriver implements MessagingDriver {
   Future<NotificationPermission> getPermission() async =>
       NotificationPermission.denied;
   @override
-  Future<NotificationPermission> requestPermission() async =>
-      NotificationPermission.denied;
+  Future<NotificationPermission> requestPermission() async {
+    permissionRequests++;
+    return NotificationPermission.denied;
+  }
+
   @override
   Future<String?> getFcmToken() async => null;
   @override
@@ -42,6 +46,41 @@ class LaunchDriver implements MessagingDriver {
 }
 
 void main() {
+  for (final automatic in [true, false]) {
+    testWidgets('startup permission enabled=$automatic is forwarded once', (
+      tester,
+    ) async {
+      final driver = LaunchDriver();
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const Text('Ready')),
+      );
+      final app = PocketMfo(
+        pocketBase: Backend().client(),
+        authCollection: 'users',
+        appMetricaConfig: const AppMetricaConfig('test'),
+        analytics: Analytics(),
+        storage: MemorySessionStorage(),
+        push: PocketMfoPushConfig(
+          navigatorKey: navigator,
+          onNavigate: (_) async {},
+          messagingDriver: driver,
+          requestPermissionOnStart: automatic,
+        ),
+      );
+      addTearDown(app.dispose);
+      await Future.wait([app.initialize(), app.initialize()]);
+      await app.initialize();
+      expect(driver.starts, 1);
+      expect(driver.permissionRequests, automatic ? 1 : 0);
+      expect(
+        await app.messaging!.getPermission(),
+        NotificationPermission.denied,
+      );
+      await tester.pumpAndSettle();
+    });
+  }
+
   testWidgets('cold push waits for guest auth and root Navigator', (
     tester,
   ) async {

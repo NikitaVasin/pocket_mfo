@@ -5,10 +5,6 @@ class DemoRepository {
   DemoRepository(this.integration);
   final PocketMfo integration;
   PocketBase get pb => integration.pocketBase;
-  Future<void> initialize() => integration.initialize();
-  Future<void> login(String email, String password) =>
-      integration.signIn(email, password);
-  Future<void> logout() => integration.logout();
   Future<List<RecordModel>> offers() => pb
       .collection('partner_links')
       .getFullList(filter: 'active = true', sort: 'name');

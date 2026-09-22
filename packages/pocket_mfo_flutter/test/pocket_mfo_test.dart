@@ -47,11 +47,13 @@ class Backend {
   int? authCode;
   bool loseCreateResponse = false;
   Completer<http.Response>? delayedExperiments;
+  Completer<http.Response>? delayedLink;
   Map<String, String> assignments = {'offers': 'premium/checkout/B'};
   http.Response json(Object body, [int code = 200]) =>
       http.Response(jsonEncode(body), code);
   Future<http.Response> handle(http.Request request) async {
     requests.add(request);
+    if (request.url.path.endsWith('/resolve')) return delayedLink!.future;
     final body = request.body.isEmpty
         ? <String, dynamic>{}
         : jsonDecode(request.body) as Map<String, dynamic>;
@@ -345,6 +347,46 @@ void main() {
     expect(app.experiments, isNull);
     expect(() => app.refreshExperiments(), throwsStateError);
   });
+
+  for (final reauthenticate in [false, true]) {
+    test(
+      'resolve rejects a revoked session, reauthenticate=$reauthenticate',
+      () async {
+        await app.initialize();
+        final original = pb.authStore.record!;
+        backend.delayedLink = Completer<http.Response>();
+        final result = app.resolvePartnerLink(linkId: 'offer');
+        await Future<void>.delayed(Duration.zero);
+        final rejected = expectLater(
+          result,
+          throwsA(isA<PocketMfoAuthRequired>()),
+        );
+        if (reauthenticate) {
+          pb.authStore.clear();
+          // Even returning to the same account must not revive an old request.
+          pb.authStore.save(token, original);
+        } else {
+          pb.authStore.save(expired, original);
+        }
+        backend.delayedLink!.complete(
+          backend.json({
+            'clickId': 'old-click',
+            'expiresAt': '2030-01-01T00:00:00Z',
+            'link': {
+              'url': 'https://example.test/old-session',
+              'mode': 'appView',
+              'saveCooke': true,
+              'changeClient': false,
+              'showLoader': true,
+              'openUrlsInBrowser': false,
+              'skipWarningDialog': false,
+            },
+          }),
+        );
+        await rejected;
+      },
+    );
+  }
 
   test(
     'failed ordinary login preserves the active guest and snapshot',

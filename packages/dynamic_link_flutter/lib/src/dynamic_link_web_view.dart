@@ -6,12 +6,9 @@ import 'dart:async';
 import 'package:dynamic_link_flutter/src/web_view_back_navigation.dart';
 import 'package:dynamic_link_flutter/src/dynamic_link_web_data.dart';
 
-import 'dart:convert';
-
 import 'package:dynamic_link_flutter/src/android_file_picker_stub.dart'
     if (dart.library.io) 'package:dynamic_link_flutter/src/android_file_picker_io.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -31,8 +28,6 @@ final class const DynamicLinkWebView({
 
 final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
   final ValueNotifier<double> _progress = .new(0);
-  final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
-  final WebViewCookieManager _cookieManager = WebViewCookieManager();
   WebViewController? _controller;
   var _initialized = false;
   bool _cleared = false;
@@ -42,6 +37,9 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
   String? _historyBoundaryUrl;
   String? _lastFinishedUrl;
   final _webGeneration = DynamicLinkWebData.generation;
+  bool get _active =>
+      mounted && !_cleared && _webGeneration == DynamicLinkWebData.generation;
+
   @override
   void initState() {
     super.initState();
@@ -74,12 +72,10 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
   }
 
   Future<void> _initializeWebView() async {
-    if (widget.saveCooke) {
-      await _restoreCookies(widget.uri);
-    }
-    if (!mounted ||
-        _cleared ||
-        _webGeneration != DynamicLinkWebData.generation) {
+    // Native stores preserve Secure, HttpOnly, SameSite, path and expiry.
+    // Never reconstruct cookies from document.cookie.
+    await DynamicLinkWebData.removeLegacyCookies();
+    if (!_active) {
       return;
     }
 
@@ -100,28 +96,24 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
             unawaited(_installHistoryBoundaryGuard());
           },
           onProgress: (progress) {
-            if (mounted) {
+            if (_active) {
               _progress.value = (progress / 100).clamp(0, 1);
             }
           },
           onPageFinished: (url) async {
-            if (!mounted ||
-                _cleared ||
-                _webGeneration != DynamicLinkWebData.generation) {
+            if (!_active) {
               return;
             }
             _firstPageFinished = true;
             _lastFinishedUrl = url;
             await _installHistoryBoundaryGuard();
+            if (!_active) return;
             _progress.value = 1;
             await _updateBackNavigation(controller);
-            if (widget.saveCooke) {
-              await _persistCookies(controller, Uri.parse(url));
-            }
           },
           onNavigationRequest: (request) async {
             await _syncHistoryBoundaryFromPage();
-            if (_cleared) {
+            if (!_active) {
               return request.url == 'about:blank'
                   ? NavigationDecision.navigate
                   : NavigationDecision.prevent;
@@ -139,8 +131,10 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
         ),
       );
     await configureAndroidFilePicker(controller);
+    if (!_active) return;
     if (widget.saveCooke && widget.changeClient) {
-      controller.setUserAgent('Chrome/99.9.9999.9 Mobile Safari/999.9');
+      await controller.setUserAgent('Chrome/99.9.9999.9 Mobile Safari/999.9');
+      if (!_active) return;
     }
     _controller = controller;
     if (widget.protectFromHistoryTrap) {
@@ -154,74 +148,13 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
         },
       );
     }
+    if (!_active) return;
     await controller.loadRequest(widget.uri);
-    if (!mounted ||
-        _cleared ||
-        _webGeneration != DynamicLinkWebData.generation) {
+    if (!_active) {
       return;
     }
     setState(() => _controller = controller);
   }
-
-  Future<void> _restoreCookies(Uri uri) async {
-    final cookies = await _preferences.getStringList(_cookieStorageKey(uri));
-    if (cookies == null ||
-        uri.host.isEmpty ||
-        !mounted ||
-        _cleared ||
-        _webGeneration != DynamicLinkWebData.generation) {
-      return;
-    }
-
-    for (final cookie in cookies) {
-      if (_webGeneration != DynamicLinkWebData.generation) return;
-      final separator = cookie.indexOf('=');
-      if (separator <= 0) continue;
-      await _cookieManager.setCookie(
-        WebViewCookie(
-          name: cookie.substring(0, separator),
-          value: cookie.substring(separator + 1),
-          domain: uri.host,
-        ),
-      );
-    }
-  }
-
-  Future<void> _persistCookies(WebViewController controller, Uri uri) async {
-    if (uri.host.isEmpty || !mounted) return;
-
-    try {
-      final result = await controller.runJavaScriptReturningResult(
-        'document.cookie',
-      );
-      final rawCookies = _javaScriptString(result);
-      final cookies = rawCookies
-          .split(';')
-          .map((cookie) => cookie.trim())
-          .where((cookie) => cookie.contains('='))
-          .toList();
-      await DynamicLinkWebData.saveCookies(
-        _cookieStorageKey(uri),
-        cookies,
-        _webGeneration,
-      );
-    } on Object {
-      // The native WebView cookie store remains persistent when a page
-      // forbids JavaScript access to its cookies.
-    }
-  }
-
-  String _javaScriptString(Object value) {
-    final string = value.toString();
-    try {
-      final decoded = jsonDecode(string);
-      return decoded is String ? decoded : string;
-    } on FormatException {
-      return string;
-    }
-  }
-
-  String _cookieStorageKey(Uri uri) => 'webview.cookies.${uri.host}';
 
   Future<void> _updateBackNavigation(WebViewController controller) async {
     final canGoBack = await controller.canGoBack();

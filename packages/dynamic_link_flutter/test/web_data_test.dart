@@ -39,11 +39,7 @@ void main() {
           nativeCalls++;
           return null;
         });
-    final oldGeneration = DynamicLinkWebData.generation;
     await clearDynamicLinkWebData();
-    await DynamicLinkWebData.saveCookies('webview.cookies.example.com', [
-      'old-account',
-    ], oldGeneration);
     expect(
       await preferences.getStringList('webview.cookies.example.com'),
       isNull,

@@ -50,11 +50,8 @@ try {
     await page.locator('flt-semantics-placeholder').waitFor({ state: 'attached', timeout: 30000 });
     await page.locator('flt-semantics-placeholder').dispatchEvent('click');
     await expect(page.getByText(/Пользователь: .* · гость/)).toBeVisible({ timeout: 15000 });
-    const guestBefore = await page.getByText(/Пользователь: .* · гость/).textContent();
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Демонстрационный оффер demo', exact: true })).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('Мои заказы', { exact: false })).toBeVisible();
-    await expect(page.getByText(/Пользователь: .* · аккаунт/)).toBeVisible();
     await page.getByRole('button', { name: 'Отправить тестовое событие', exact: true }).click();
     await expect(page.locator('flt-semantics').getByText('Событие отправлено', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Демонстрационный оффер demo', exact: true }).click();
@@ -63,14 +60,13 @@ try {
     await page.screenshot({ path: 'test-results/flutter-example-desktop.png' });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: 'test-results/flutter-example-mobile.png' });
-    await page.getByRole('button', { name: 'Выйти', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1100, height: 900 });
     await page.mouse.wheel(0, -2000);
     await expect(page.getByText(/Пользователь: .* · гость/)).toBeVisible();
-    expect(await page.getByText(/Пользователь: .* · гость/).textContent()).not.toBe(guestBefore);
+    await expect(page.getByRole('textbox', { name: 'Email', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
     expect(errors).toEqual([]);
-    console.log('Flutter web smoke passed: automatic guest, ordinary login, enriched event, offers, own orders, resolve error, new guest after logout.');
+    console.log('Flutter web smoke passed: SDK guest initialization without login form, enriched event, offers, own orders and resolve error.');
 } catch (error) {
     if (page) {
         console.error(await page.locator('body').ariaSnapshot());

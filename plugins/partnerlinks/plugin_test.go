@@ -53,10 +53,14 @@ func testProvider() Provider {
 	return Provider{ID: "test", Name: "Test", URLTemplate: "{url}?subid={clickData}", Secret: "test-provider-secret-123", SecretLocation: "query", SecretName: "secret", Fields: PostbackFields{Token: "subid", Status: "status", LeadID: "lead_id", EventID: "event_id", Timestamp: "timestamp", Amount: "amount", Currency: "currency"}, Statuses: map[string]string{"new": "lead", "yes": "approved", "wait": "hold", "no": "rejected"}, ExtraFields: map[string]string{"offer": "offer_id"}}
 }
 func setup(t *testing.T, locked bool) *fixture { return setupOptions(t, locked, false) }
-func setupOptions(t *testing.T, locked, collect bool) *fixture {
+func setupOptions(t *testing.T, locked, collect bool, configuration ...Options) *fixture {
 	t.Helper()
 	x := &fixture{status: 200}
 	x.opts = Options{AuthCollections: []string{"members"}, VariantCollections: []string{"offers"}}
+	if len(configuration) > 0 {
+		x.opts.Managed = configuration[0].Managed
+		x.opts.LockAdminConfig = configuration[0].LockAdminConfig
+	}
 	x.app = pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x.mu.Lock()
@@ -129,6 +133,7 @@ func setupOptions(t *testing.T, locked, collect bool) *fixture {
 	cfg.ApplicationID = 1234
 	cfg.PostAPIKey = "fake-post-api-key"
 	cfg.Providers = []Provider{testProvider()}
+	overlayManaged(&cfg, managed(x.app))
 	x.config, err = Configure(x.app, cfg)
 	must(t, err)
 	links, err := x.app.FindCollectionByNameOrId(LinksCollection)
@@ -431,12 +436,13 @@ func TestConfigProtectionAndRollback(t *testing.T) {
 		}
 	}
 	w := x.request("GET", "/api/partnerlinks/admin/config", x.admin, "", "")
-	if w.Code != 200 || strings.Contains(w.Body.String(), testProvider().Secret) || strings.Contains(w.Body.String(), "fake-post-api-key") {
-		t.Fatal("secret exposure")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), testProvider().Secret) || strings.Contains(w.Body.String(), "fake-post-api-key") {
+		t.Fatal("admin secret visibility or Post API key redaction")
 	}
 	var red Config
 	must(t, json.Unmarshal(w.Body.Bytes(), &red))
 	red.BaseURL = "https://new.example"
+	red.Providers[0].Secret = "" // Blank still preserves an existing secret.
 	b, _ := json.Marshal(red)
 	w = x.request("PUT", "/api/partnerlinks/admin/config", x.admin, string(b), "application/json")
 	if w.Code != 200 {

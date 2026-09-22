@@ -7,6 +7,7 @@ import (
 
 	"github.com/NikitaVasin/pocket_mfo/plugins/dynamiclink"
 	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 const LinksCollection = "partner_links"
@@ -15,6 +16,8 @@ const configID = "partnerconfig01"
 
 // Options contains trusted server configuration. Auth collections must exist at Start.
 type Options struct {
+	// Attribution snapshots a trusted campaign source when a link is issued.
+	Attribution        func(core.App, *core.Record, string) (map[string]string, error)
 	AuthCollections    []string
 	VariantCollections []string
 	Managed            *ManagedConfig
@@ -88,6 +91,7 @@ type ResolveResponse struct {
 }
 
 type clickData struct {
+	Push                 map[string]string   `json:"push,omitempty"`
 	ClickID              string              `json:"clickId"`
 	UserID               string              `json:"userId"`
 	AuthCollection       string              `json:"authCollection"`

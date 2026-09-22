@@ -43,6 +43,16 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
         PocketMfo(
           pocketBase: PocketBase(_DemoPageState.serverUrl),
           authCollection: 'users',
+          onError: (error, stack) {
+            if (!kDebugMode) return;
+            // Log only the error category/status, never request bodies,
+            // installation credentials, profile IDs or provider tokens.
+            final status = error is ClientException
+                ? ' HTTP ${error.statusCode}'
+                : '';
+            debugPrint('PocketMfo: ${error.runtimeType}$status');
+            debugPrintStack(stackTrace: stack);
+          },
           appMetricaConfig: AppMetricaConfig(preview ? 'preview-only' : sdkKey),
           analytics: preview ? PreviewAnalytics() : null,
           storage: kIsWeb ? MemorySessionStorage() : null,
@@ -50,6 +60,7 @@ class _PartnerLinksExampleState extends State<PartnerLinksExample> {
               ? PocketMfoPushConfig(
                   navigatorKey: navigatorKey,
                   requestPermissionOnStart: true,
+                  registerDevices: true,
                   onNavigate: (uri) async {
                     if (!mounted) return;
                     if (uri.path == '/orders') {

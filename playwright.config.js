@@ -7,7 +7,7 @@ export default defineConfig({
     use: { baseURL: "http://127.0.0.1:8097", screenshot: "only-on-failure", trace: "retain-on-failure" },
     projects: [
         { name: "plugins", testIgnore: "**/schemalock.spec.js" },
-        { name: "schemalock", testMatch: ["**/schemalock.spec.js", "**/partnerlinks.spec.js"], use: { baseURL: "http://127.0.0.1:8099" } },
+        { name: "schemalock", testMatch: ["**/schemalock.spec.js", "**/partnerlinks.spec.js", "**/push-mcp.spec.js"], use: { baseURL: "http://127.0.0.1:8099" } },
     ],
     webServer: [{
         command: "node tests/browser/server.mjs",

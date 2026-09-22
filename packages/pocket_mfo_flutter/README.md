@@ -68,6 +68,8 @@ await mfo.dispose();
 
 ## Пуши
 
+Для серверного [Push-плагина](../../plugins/push/README.md) задайте `registerDevices: true` в `PocketMfoPushConfig`. Фасад регистрирует AppMetrica Device ID, обновляет разрешение и активность, отключает прежнюю привязку перед сменой аккаунта, передаёт открытия кампаний. Секрет установки хранится отдельно от сессии. При сетевой ошибке отключения смена аккаунта не продолжается; повторите после восстановления связи. После ручного изменения разрешения вызовите `mfo.refreshPushDevice()`. Для условий по версии задавайте `AppMetricaConfig.appVersion`. Без серверного плагина оставьте `registerDevices: false` (по умолчанию).
+
 Передайте `PocketMfoPushConfig(navigatorKey: navigatorKey, onNavigate: ...)` и тот же ключ корневому `MaterialApp`/router. `onNavigate` обрабатывает прикладные пути, например `/orders`. Firebase/APNs и нативную часть настройте по [Messaging](../app_messaging_flutter/README.md). Пуши опциональны. Для автоматического запроса разрешения передайте `requestPermissionOnStart: true` в `PocketMfoPushConfig`: запрос выполняется после инициализации Messaging один раз на экземпляр, включая параллельные вызовы `initialize`. По умолчанию параметр `false`; вручную доступен `mfo.messaging?.requestPermission()`. В запускаемом примере автоматический запрос включён.
 
 Действие холодного запуска ждёт авторизации и готового Navigator. Партнёрские действия используют существующий [PushLinkResolver](../push_links_flutter/README.md). `dispose()` удаляет подписки и запрещает отложенную навигацию. Не вызывайте методы изменения SDK профиля через Messaging параллельно фасаду.
@@ -77,3 +79,5 @@ await mfo.dispose();
 `PocketMfoAnalytics`, `SessionStorage` и `MessagingDriver` подменяются для тестов и браузерного примера. Нативные SDK предназначены для Android/iOS. Запуск тестов: `fvm flutter test packages/pocket_mfo_flutter/test`.
 
 [Ограничения Post API](https://appmetrica.yandex.ru/docs/ru/mobile-api/post/restrictions): профиль должен быть известен SDK; назначенному в первой и единственной сессии профилю может потребоваться повторный вход. Отправка `user.id` не устраняет это ограничение. Серверные события старше 14 дней не передатируются. HTTP 200 означает приём API, а не немедленное появление в отчёте. Product Flow в этой интеграции не используется; воронка строится по `offer_*`, доходы — через Revenue выбранного статуса провайдера.
+
+Регистрация пуш-устройства использует числовой `DeviceIdHash` из `AppMetrica.requestStartupParams`, соответствующий `appmetrica_device_id` в Push API. Не подменяйте его обычным `AppMetrica.deviceId` (hex). Получение ограничено 10 секундами; ошибки направляются в `onError`, повтор возможен через `refreshPushDevice()` или при возврате в приложение. Flutter-пример выводит в debug только категорию ошибки, HTTP-статус и стек, без токенов и идентификаторов.

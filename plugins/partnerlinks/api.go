@@ -103,6 +103,12 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 	if err != nil {
 		return r.InternalServerError("Не удалось подготовить эксперименты", nil)
 	}
+	if p.options.Attribution != nil {
+		data.Push, err = p.options.Attribution(r.App, r.Auth, record.Id)
+		if err != nil {
+			return r.InternalServerError("Не удалось определить источник перехода", nil)
+		}
+	}
 	token, err := newToken()
 	if err != nil {
 		return r.BadRequestError(err.Error(), nil)

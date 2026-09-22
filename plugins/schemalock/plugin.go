@@ -86,6 +86,11 @@ func allowed(r *http.Request) bool {
 		"GET /api/partnerlinks/postbacks/{provider}", "POST /api/partnerlinks/postbacks/{provider}",
 		"GET /api/singleton/admin/collections/{collection}":
 		return true
+	case "GET /api/mcp", "POST /api/mcp", "DELETE /api/mcp",
+		"GET /api/mcp/admin/keys", "POST /api/mcp/admin/keys", "DELETE /api/mcp/admin/keys/{id}",
+		"GET /api/push/admin/state", "PUT /api/push/admin/config", "POST /api/push/admin/{action}",
+		"POST /api/push/devices", "POST /api/push/devices/disable", "POST /api/push/open":
+		return true
 	}
 	return false
 }

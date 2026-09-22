@@ -9,6 +9,8 @@
 | [Singleton](plugins/singleton) | Одна запись на коллекцию или набор Variants; включение в админке, форма вместо таблицы |
 | [Dynamic Link](plugins/dynamiclink) | Переиспользуемое поле с URL и настройками WebView/браузера |
 | [Partner Links](plugins/partnerlinks) | Партнёрские ссылки с хранением конверсий, настройки провайдеров, постбеки AppMetrica и Flutter-клиент |
+| [Push](plugins/push) | Устройства, аудитории, черновики кампаний, ручной/отложенный запуск через AppMetrica и атрибуция конверсий |
+| [MCP](plugins/mcp) | Отдельная вкладка ключей, права на инструменты и коллекции, наполнение контента и подключение других плагинов через `Provider` |
 | [Schema Lock](plugins/schemalock) | Схема только из кода; записи, Variants и настройки сервера доступны, системные записи только для чтения, кроме `_superusers` |
 
 Поддерживаемая версия: **PocketBase v0.40.4**, Go **1.27**. UI API этой версии экспериментальный: обновление PocketBase требует повторного запуска интеграционных и браузерных тестов. Форк PocketBase не нужен.
@@ -98,6 +100,8 @@ UI встроен в Go-бинарник через `embed.FS`; отдельна
 | [Singleton](plugins/singleton/README.md) | [AGENTS.md](plugins/singleton/AGENTS.md) |
 | [Dynamic Link](plugins/dynamiclink/README.md) | [AGENTS.md](plugins/dynamiclink/AGENTS.md) |
 | [Partner Links](plugins/partnerlinks/README.md) | [AGENTS.md](plugins/partnerlinks/AGENTS.md) |
+| [Push](plugins/push/README.md) | [AGENTS.md](plugins/push/AGENTS.md) |
+| [MCP](plugins/mcp/README.md) | [AGENTS.md](plugins/mcp/AGENTS.md) |
 | [Schema Lock](plugins/schemalock/README.md) | [AGENTS.md](plugins/schemalock/AGENTS.md) |
 
 В example коллекция **demo_homepage** показывает Singleton: форму вместо таблицы и шесть наборов контента. Включение Singleton задаётся в миграции; в приложении без Schema Lock также доступен переключатель **Collection settings → Singleton**.
@@ -155,5 +159,7 @@ fvm flutter test packages/dynamic_link_flutter/test packages/partner_links_flutt
 ```
 
 ## Единый Flutter-пакет
+
+В example также подключены вкладки **Пуши** и **MCP**. MCP доступен по `/api/mcp`; ключ создаётся в админке с отдельными правами на инструменты и коллекции. `push_launch` разрешается отдельно от подготовки кампаний. По умолчанию MCP-контент ограничен `demo_offers`, `partner_links`, `dynamic_link_settings`. Для рассылок нужны OAuth token AppMetrica в серверных настройках и регистрация нативных устройств; сохранение кампании ничего не отправляет. [Подключение MCP и интерфейс провайдера](plugins/mcp/README.md), [кампании и атрибуция](plugins/push/README.md).
 
 [pocket_mfo_flutter](packages/pocket_mfo_flutter/README.md) объединяет гостевой/обычный вход, защищённое хранение сессии, AppMetrica с user.id, снимок экспериментов в каждом событии, партнёрские ссылки и опциональные пуши. [Пример](examples/partner_links_app) автоматически входит гостем через `users`. Существующая `demo_members` переименовывается с сохранением ID и записей; заполненная отдельная `users` требует ручного решения конфликта, миграция её не удаляет.

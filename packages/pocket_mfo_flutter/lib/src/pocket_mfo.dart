@@ -11,6 +11,7 @@ import 'package:push_links_flutter/push_links_flutter.dart';
 
 import 'analytics.dart';
 import 'session_storage.dart';
+import 'push_devices.dart';
 
 typedef PocketMfoErrorHandler = void Function(Object error, StackTrace stack);
 
@@ -22,12 +23,20 @@ final class PocketMfoPushConfig {
     this.requestPermissionOnStart = false,
     this.messagingDriver,
     this.embeddedViewBuilder,
+    this.registerDevices = false,
+    this.deviceId,
   });
   final GlobalKey<NavigatorState> navigatorKey;
   final Future<void> Function(Uri uri) onNavigate;
   final bool requestPermissionOnStart;
   final MessagingDriver? messagingDriver;
   final DynamicLinkEmbeddedViewBuilder? embeddedViewBuilder;
+
+  /// Enable when the server installs plugins/push.
+  final bool registerDevices;
+  /// Override for the numeric AppMetrica API identifier (SDK DeviceIdHash).
+  /// Do not return the hexadecimal AppMetrica.deviceId.
+  final Future<String?> Function()? deviceId;
 }
 
 class PocketMfoAuthRequired implements Exception {
@@ -72,6 +81,7 @@ final class PocketMfo with WidgetsBindingObserver {
   final SessionStorage storage;
   final PocketMfoAnalytics analytics;
   final PocketMfoPushConfig? push;
+  PushDevices? _pushDevices;
   final PocketMfoErrorHandler? onError;
 
   /// Nonprivileged required fields; their permission is enforced by server rules.
@@ -191,6 +201,7 @@ final class PocketMfo with WidgetsBindingObserver {
             _serial(() async {
               await _syncAnalytics();
               await _persist();
+              await _syncPushDevice();
             }).then((_) => refreshExperiments()).catchError(_diagnose),
           );
         }
@@ -340,9 +351,16 @@ final class PocketMfo with WidgetsBindingObserver {
   Future<void> signIn(String identity, String password) async {
     await _serial(() async {
       await _prepare();
-      await pocketBase
-          .collection(authCollection)
-          .authWithPassword(identity, password);
+      await _pushDevices?.disable();
+      try {
+        await pocketBase
+            .collection(authCollection)
+            .authWithPassword(identity, password);
+      } catch (_) {
+        // Failed authentication leaves the previous account active.
+        await _syncPushDevice();
+        rethrow;
+      }
       _guest = null;
       _noticeIdentity();
       await _syncAnalytics();
@@ -356,6 +374,7 @@ final class PocketMfo with WidgetsBindingObserver {
   Future<void> logout() async {
     await _serial(() async {
       await _prepare();
+      await _pushDevices?.disable();
       _ready = false;
       _guest = null;
       pocketBase.authStore.clear();
@@ -476,7 +495,18 @@ final class PocketMfo with WidgetsBindingObserver {
 
   Future<void> _startMessaging() async {
     final config = push;
-    if (config == null || _messaging != null) return;
+    if (config == null) return;
+    if (_messaging != null) {
+      await _syncPushDevice();
+      return;
+    }
+    if (config.registerDevices) {
+      _pushDevices ??= PushDevices(
+        pocketBase: pocketBase,
+        storage: storage,
+        deviceId: config.deviceId,
+      );
+    }
     _resolver = PushLinkResolver(
       navigatorKey: config.navigatorKey,
       onNavigate: config.onNavigate,
@@ -499,10 +529,20 @@ final class PocketMfo with WidgetsBindingObserver {
     try {
       await messaging.initialize(
         appMetricaApiKey: appMetricaConfig.apiKey,
-        onAction: _resolver!.call,
+        onAction: (action) async {
+          await initialize();
+          await _syncPushDevice();
+          try {
+            await _pushDevices?.opened(action.data);
+          } catch (error, stack) {
+            _diagnose(error, stack);
+          }
+          if (action.data['type'] != 'app') await _resolver?.call(action);
+        },
         onError: _diagnose,
         requestPermissionOnStart: config.requestPermissionOnStart,
       );
+      await _syncPushDevice();
       if (_disposed) await messaging.dispose();
     } catch (error, stack) {
       await messaging.dispose();
@@ -513,10 +553,33 @@ final class PocketMfo with WidgetsBindingObserver {
     }
   }
 
+  /// Refresh after changing notification permissions, including in OS settings.
+  Future<void> refreshPushDevice() => _serial(_syncPushDevice);
+
+  Future<void> _syncPushDevice() async {
+    final devices = _pushDevices;
+    final messaging = _messaging;
+    if (devices == null || messaging == null || !_ready || _disposed) return;
+    try {
+      final permission = await messaging.getPermission();
+      await devices.sync(
+        enabled:
+            permission == NotificationPermission.authorized ||
+            permission == NotificationPermission.provisional,
+        language: WidgetsBinding.instance.platformDispatcher.locale
+            .toLanguageTag(),
+        appVersion: appMetricaConfig.appVersion ?? '',
+      );
+    } catch (error, stack) {
+      _diagnose(error, stack);
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _ready && !_disposed) {
       unawaited(refreshExperiments());
+      unawaited(_serial(_syncPushDevice).catchError(_diagnose));
     }
   }
 
@@ -528,6 +591,7 @@ final class PocketMfo with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     await _authSubscription?.cancel();
     _resolver?.dispose();
+    _pushDevices?.dispose();
     // Pending HTTP calls may finish later; _alive/epoch guards prevent them
     // from activating analytics or restoring subscriptions after disposal.
     await _messaging?.dispose();

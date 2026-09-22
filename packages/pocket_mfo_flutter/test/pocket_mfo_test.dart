@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -57,6 +58,9 @@ class Backend {
     final body = request.body.isEmpty
         ? <String, dynamic>{}
         : jsonDecode(request.body) as Map<String, dynamic>;
+    if (request.url.path.startsWith('/api/push/')) {
+      return json({'id': body['id']});
+    }
     if (request.url.path == '/api/variants/me') {
       if (delayedExperiments != null) return delayedExperiments!.future;
       return json({
@@ -93,6 +97,24 @@ class Backend {
     'https://example.test',
     httpClientFactory: () => MockClient(handle),
   );
+}
+
+class PushDriver implements MessagingDriver {
+  @override
+  Stream<PushAction> get actions => const Stream.empty();
+  @override
+  Future<void> initialize(String key) async {}
+  @override
+  Future<NotificationPermission> getPermission() async =>
+      NotificationPermission.authorized;
+  @override
+  Future<NotificationPermission> requestPermission() => getPermission();
+  @override
+  Future<String?> getFcmToken() async => null;
+  @override
+  Future<void> setUserProfileId(String? id) async {}
+  @override
+  Future<void> dispose() async {}
 }
 
 void main() {
@@ -417,5 +439,39 @@ void main() {
     await app.initialize();
     expect(app.user!.id, isNot(guest));
     expect(otherBackend.creates, 1);
+  });
+
+  test('failed login restores push binding for the current account', () async {
+    await app.dispose();
+    app = PocketMfo(
+      pocketBase: pb,
+      authCollection: 'users',
+      appMetricaConfig: const AppMetricaConfig('fake-sdk-key'),
+      storage: storage,
+      analytics: analytics,
+      push: PocketMfoPushConfig(
+        navigatorKey: GlobalKey<NavigatorState>(),
+        onNavigate: (_) async {},
+        messagingDriver: PushDriver(),
+        registerDevices: true,
+        deviceId: () async => '42',
+      ),
+    );
+    await app.initialize();
+    final previousUser = app.user!.id;
+    backend.requests.clear();
+    await expectLater(
+      app.signIn('member', 'wrong'),
+      throwsA(isA<ClientException>()),
+    );
+    final requests = backend.requests
+        .where((r) => r.url.path.startsWith('/api/push/'))
+        .toList();
+    expect(requests.map((r) => r.url.path), [
+      '/api/push/devices/disable',
+      '/api/push/devices',
+    ]);
+    expect(jsonDecode(requests.last.body)['enabled'], true);
+    expect(app.user!.id, previousUser);
   });
 }

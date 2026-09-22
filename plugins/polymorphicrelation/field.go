@@ -109,7 +109,8 @@ func (f *Field) ValidateSettings(ctx context.Context, app core.App, c *core.Coll
 	if err := f.JSONField.ValidateSettings(ctx, app, c); err != nil {
 		return err
 	}
-	if c.System || c.IsView() {
+	systemHostAllowed := c.IsBase() && app.Store().Get(systemCollectionKey+c.Name) == true
+	if (c.System && !systemHostAllowed) || c.IsView() {
 		return fmt.Errorf("polymorphic relations require a non-system base or auth collection")
 	}
 	if len(f.CollectionIDs) == 0 {

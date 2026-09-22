@@ -1,0 +1,4 @@
+group 'com.mfohub.dynamiclinkflutter'
+version '1.0'
+apply plugin: 'com.android.library'
+android { namespace 'com.mfohub.dynamiclinkflutter'; compileSdk 36; defaultConfig { minSdk 23 } }

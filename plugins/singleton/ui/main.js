@@ -1,5 +1,5 @@
 // Native PocketBase v0.40.4 field editors; no frontend build or PocketBase fork.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/singleton/editor.css?v=1" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/singleton/editor.css?v=2" }));
 const api = "/api/singleton/admin/collections/";
 const read = value => typeof value === "function" ? value() : value;
 const enabled = c => c?.type === "base" && !c.system && c.indexes?.some(i => /\bidx_ps_[a-f0-9]{15}\b/.test(i));

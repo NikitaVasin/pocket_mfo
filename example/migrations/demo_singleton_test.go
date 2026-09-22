@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"github.com/NikitaVasin/pocket_mfo/plugins/partnerlinks"
 	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/NikitaVasin/pocket_mfo/plugins/singleton"
 	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
@@ -13,6 +14,7 @@ func TestDemoSingleton(t *testing.T) {
 	polymorphicrelation.Register(app)
 	variants.Register(app)
 	singleton.Register(app)
+	partnerlinks.Register(app, partnerlinks.Options{})
 	check := func(err error) {
 		t.Helper()
 		if err != nil {

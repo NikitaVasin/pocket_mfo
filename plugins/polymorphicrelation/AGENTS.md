@@ -27,7 +27,7 @@ if err := app.Save(comments); err != nil {
 - Для фильтров, правил и обратных связей используйте `ServiceFieldName(fieldID, collectionID)`, а не вычисление имени на стороне клиента. Публичный alias `subject` поддерживается для API expand; Go `app.ExpandRecord` использует служебное имя.
 - `Restrict` запрещает удаление используемого родителя; `SetNull` очищает необязательные связи; `Cascade` удаляет дочерние записи. `SetNull` нельзя сочетать с `Required`.
 - Изменения публичного JSON и служебных relations должны оставаться согласованными при Save, SaveNoValidate, удалении и откате. Переименование не должно ломать связь: идентичность задают ID.
-- Поле разрешено в обычных и auth-коллекциях, исключены системные и view. Schema Lock запрещает создание/изменение поля через UI; picker в форме записи продолжает работать.
+- Поле разрешено в обычных и auth-коллекциях, исключены view и системные коллекции по умолчанию. Доверенный Go-код может разрешить системную base-коллекцию-хост через `Options.SystemCollections` в Register (используется для conversations). Системные auth-хосты и системные цели по-прежнему запрещены. Опция не заменяет запрет HTTP-записи, который обеспечивает владеющий коллекцией плагин. Schema Lock запрещает создание/изменение поля через UI; picker в форме записи продолжает работать.
 - Основные файлы: `field.go` — тип/валидация, `schema.go` — companions/индексы, `plugin.go` — хуки целостности, `enrich.go` — HTTP/auth/realtime expand.
 
 Проверки: `go test -race ./plugins/polymorphicrelation` и `npx playwright test --project=plugins polymorphic.spec.js`. При изменении совместных хуков выполните проверки из корневого AGENTS.md. Сохраняйте тесты импорта, циклов cascade, отката setNull, auth/realtime enrichment и столкновения ID.

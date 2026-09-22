@@ -1,0 +1,21 @@
+name: partner_links_flutter
+description: PocketBase partner links client and Flutter opening integration.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  pocketbase: ^0.25.1
+  dynamic_link:
+    path: ../dynamic_link
+  dynamic_link_flutter:
+    path: ../dynamic_link_flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  http: ^1.3.0

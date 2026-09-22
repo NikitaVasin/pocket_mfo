@@ -1,0 +1,21 @@
+name: partner_links_example
+description: Runnable PocketBase partner links and orders example.
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.4
+dependencies:
+  flutter:
+    sdk: flutter
+  pocketbase: ^0.25.1
+  partner_links_flutter:
+    path: ../../packages/partner_links_flutter
+  push_links_flutter:
+    path: ../../packages/push_links_flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  http: ^1.3.0
+flutter:
+  uses-material-design: true

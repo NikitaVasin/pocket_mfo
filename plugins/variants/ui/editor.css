@@ -78,3 +78,6 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* Unmanaged collections and pickers keep the native searchbar as the flex item. */
+.pv-native-search { display: contents; }

@@ -1,0 +1,19 @@
+name: push_links_flutter
+description: Push action resolver for app routes and PocketBase partner overlays.
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.4
+dependencies:
+  flutter:
+    sdk: flutter
+  app_messaging_flutter:
+    path: ../app_messaging_flutter
+  partner_links_flutter:
+    path: ../partner_links_flutter
+  dynamic_link_flutter:
+    path: ../dynamic_link_flutter
+  pocketbase: ^0.25.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

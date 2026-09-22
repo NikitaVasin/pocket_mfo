@@ -15,9 +15,24 @@ import (
 //go:embed ui/*
 var assets embed.FS
 
+// Options configures additional server-owned hosts for polymorphic fields.
+// The owning plugin must protect their schema and HTTP record writes itself.
+type Options struct {
+	SystemCollections []string // exact base collection names; never system auth targets
+}
+
+const systemCollectionKey = "polymorphicrelation.systemCollection."
+
 // Register installs model hooks and the embedded admin extension. Call before app.Start.
 // Stable hook IDs make repeated registration on the same app harmless.
-func Register(app core.App) {
+func Register(app core.App, options ...Options) {
+	// Registration is trusted Go code. No record, schema field or HTTP parameter
+	// can opt a system collection in. Re-registration retains earlier grants.
+	for _, o := range options {
+		for _, name := range o.SystemCollections {
+			app.Store().Set(systemCollectionKey+name, true)
+		}
+	}
 	app.OnCollectionCreate().Bind(&hook.Handler[*core.CollectionEvent]{Id: Type, Func: saveCollection})
 	app.OnCollectionUpdate().Bind(&hook.Handler[*core.CollectionEvent]{Id: Type, Func: saveCollection})
 	app.OnRecordCreate().Bind(&hook.Handler[*core.RecordEvent]{Id: Type, Func: saveRecord})

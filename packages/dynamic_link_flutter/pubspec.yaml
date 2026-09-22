@@ -1,0 +1,35 @@
+name: dynamic_link_flutter
+description: Flutter navigation and embedded WebView for dynamic_link.
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  cupertino_icons: ^1.0.8
+  dynamic_link:
+    path: ../dynamic_link
+  flutter:
+    sdk: flutter
+  image: 4.9.1
+  image_picker: 1.2.2
+  path_provider: ^2.1.6
+  shared_preferences: ^2.5.4
+  url_launcher: ^6.3.2
+  webview_flutter: 4.13.1
+  webview_flutter_android: 4.13.0
+
+dev_dependencies:
+  shared_preferences_platform_interface: ^2.4.1
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.mfohub.dynamiclinkflutter
+        pluginClass: DynamicLinkFlutterPlugin
+      ios:
+        pluginClass: DynamicLinkFlutterPlugin

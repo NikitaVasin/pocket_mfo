@@ -1,5 +1,5 @@
 // Native PocketBase components with scoped layout styles for the variants editor.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/variants/editor.css?v=2" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/variants/editor.css?v=3" }));
 const pvApi = "/api/variants/admin/collections/";
 const pvService = name => ["pv_configs", "pv_sets", "pv_states", "pv_history"].includes(name) || name?.startsWith("pv_choice_");
 const pvKey = prefix => prefix + app.utils.randomString(8).toLowerCase();
@@ -111,7 +111,7 @@ function pvRecordsControls(propsArg = {}) {
             app.components.select({ id: id + suffix, required: true, options, value, onchange: opts => change(opts[0]?.value || "default") }));
     }
     return t.div({
-        className: "full-width pv-records-presets",
+        className: () => state.managed || props.presetsOnly ? "full-width pv-records-presets" : "pv-records-presets pv-native-search",
         hidden: () => props.hidden,
         // Pickers also use recordsSearchbar; presets belong only to the main page.
         onmount: el => state.mounted = props.presetsOnly || props.mainPage || el.parentElement?.classList.contains("page-content") || false,

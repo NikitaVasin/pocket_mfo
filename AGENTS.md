@@ -10,12 +10,14 @@
 | `plugins/variants` | Контент по аудиториям и группам экспериментов | [AGENTS.md](plugins/variants/AGENTS.md) |
 | `plugins/singleton` | Максимум одна запись в коллекции или наборе Variants | [AGENTS.md](plugins/singleton/AGENTS.md) |
 | `plugins/schemalock` | Запрет изменения схемы через HTTP, включая суперпользователей | [AGENTS.md](plugins/schemalock/AGENTS.md) |
+| `plugins/dynamiclink` | URL и параметры открытия как отдельный тип поля | [AGENTS.md](plugins/dynamiclink/AGENTS.md) |
+| `plugins/partnerlinks` | Партнёрские ссылки, хранение конверсий и постбеки AppMetrica | [AGENTS.md](plugins/partnerlinks/AGENTS.md) |
 
 `example/` — локальный демонстрационный сервер со всеми плагинами. `tests/testapp/` — отдельный стенд без Schema Lock для тестов редакторов схемы. `tests/browser/` проверяет оба стенда. Публичные API и примеры использования находятся в README каждого плагина.
 
 ## Подключение и изменения
 
-- Вызывайте `Register(app)` до `Bootstrap` / `Start`. Рекомендуемый порядок: Polymorphic Relation, Variants, Singleton, Schema Lock. Для совместной работы используйте одно приложение `core.App`.
+- Вызывайте `Register(app)` до `Bootstrap` / `Start`; Partner Links принимает также `Options`. Рекомендуемый порядок: Polymorphic Relation, Variants, Singleton, Dynamic Link, Partner Links, Schema Lock. Для совместной работы используйте одно приложение `core.App`.
 - При включённом Schema Lock меняйте прикладную схему миграциями / Go-кодом. Настраивайте Variants через `Load` / `Publish`, Singleton через `Configure`. Не редактируйте служебные таблицы, поля и индексы вручную.
 - Схема, данные и конфигурация должны меняться атомарно. Внутри `RunInTransaction` передавайте `tx`, а не внешнее приложение. Не превращайте внутренний контекст плагинов в публичный способ обхода защиты.
 - Сохраняйте семантику API rules PocketBase: `nil` означает доступ только суперпользователям, указатель на пустую строку — открытый доступ. Не смешивайте эти значения.
@@ -45,3 +47,5 @@ Go-файлы форматируйте `gofmt`. При ограниченном 
 Публичный репозиторий: `github.com/NikitaVasin/pocket_mfo`, тот же путь используется в go.mod и импортах. Не меняйте регистр имени владельца. Не придумывайте лицензию и номер релиза. Пользователь попросил пока не добавлять лицензию. Подготовка файлов не означает публикацию или разрешение отправлять изменения в GitHub. Порядок дальнейших действий — [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 Учётные данные из `example/migrations` — открытые демонстрационные данные. Не подключайте эти миграции к production. Базы, бэкапы, `.env`, токены и пользовательские данные не должны попадать в Git.
+
+Dart/Flutter: используйте FVM из `.fvmrc`, корневой pub workspace и единый lockfile. Пример находится в `examples/partner_links_app`, Go-стенд — в `example`.

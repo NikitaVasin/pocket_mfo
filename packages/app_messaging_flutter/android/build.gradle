@@ -1,0 +1,31 @@
+group 'dev.appbase.messaging'
+version '1.0'
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.2.0' }
+}
+apply plugin: 'com.android.library'
+evaluationDependsOn(':firebase_core')
+def firebaseCore = project(':firebase_core')
+def firebaseVersion = rootProject.ext.has('FlutterFire') && rootProject.ext.FlutterFire['FirebaseSDKVersion']
+    ? rootProject.ext.FlutterFire['FirebaseSDKVersion'] : firebaseCore.properties['FirebaseSDKVersion']
+
+android {
+    namespace 'dev.appbase.messaging'
+    buildFeatures { androidResources = true }
+    compileSdk 36
+    defaultConfig { minSdk 23 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation project(':firebase_messaging')
+    implementation platform("com.google.firebase:firebase-bom:${firebaseVersion}")
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'io.appmetrica.analytics:push:4.3.0'
+    implementation 'io.appmetrica.analytics:push-provider-firebase:4.3.0'
+}

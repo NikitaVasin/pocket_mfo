@@ -1,0 +1,23 @@
+name: app_messaging_flutter
+description: Firebase Core and Messaging with AppMetrica analytics and push actions.
+publish_to: none
+resolution: workspace
+environment:
+  sdk: ^3.13.4
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
+  appmetrica_plugin: ^4.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.appbase.messaging
+        pluginClass: AppMessagingPlugin
+      ios:
+        pluginClass: AppMessagingPlugin

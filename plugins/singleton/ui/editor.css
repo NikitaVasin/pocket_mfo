@@ -7,3 +7,6 @@
 .ps-record-form [role=alert] { margin-bottom: 16px; }
 .ps-record-form [role=alert] button { margin: 8px; }
 .ps-settings { max-width: 760px; }
+
+/* Preserve native searchbar flex sizing in collection pages and relation pickers. */
+.ps-search-host { display: contents; }

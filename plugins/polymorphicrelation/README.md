@@ -132,3 +132,7 @@ final unsubscribe = await pb.collection('comments').subscribe(
 await unsubscribe();
 ```
 
+
+### Служебные коллекции
+
+По умолчанию системные коллекции не могут содержать полиморфное поле. Для собственной системной base-коллекции серверный плагин может вызвать `polymorphicrelation.Register(app, polymorphicrelation.Options{SystemCollections: []string{"conversations"}})`. Разрешение задаётся только доверенным Go-кодом, по точному имени, и сохраняется при повторном Register. Оно не разрешает системные auth-коллекции или системные цели связи и не открывает HTTP-запись: её должен закрывать владелец коллекции. Partner Links делает это для `conversations`.

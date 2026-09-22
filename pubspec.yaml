@@ -1,0 +1,11 @@
+name: pocket_mfo_workspace
+publish_to: none
+environment:
+  sdk: ^3.13.4
+workspace:
+  - packages/dynamic_link
+  - packages/dynamic_link_flutter
+  - packages/partner_links_flutter
+  - packages/app_messaging_flutter
+  - packages/push_links_flutter
+  - examples/partner_links_app

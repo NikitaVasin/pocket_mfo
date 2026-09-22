@@ -1,0 +1,10 @@
+.dl-input { min-width: 0; }
+.dl-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dl-controls { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.dl-controls > .field, .dl-option > .field { margin: 0; }
+.dl-option { min-width: 0; }
+.dl-option .field-help { margin-top: 6px; }
+.dl-controls summary { cursor: pointer; margin-bottom: 12px; }
+.dl-preview { display: flex; flex-direction: column; min-width: 0; }
+.dl-preview > span { overflow: hidden; text-overflow: ellipsis; }

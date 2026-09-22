@@ -7,3 +7,13 @@ playwright-report/
 .env.*
 !.env.example
 .DS_Store
+.dart_tool/
+build/
+.flutter-plugins-dependencies
+packages/**/pubspec.lock
+packages/**/coverage/
+
+# FVM Version Cache
+.fvm/
+.fvm/
+examples/**/coverage/

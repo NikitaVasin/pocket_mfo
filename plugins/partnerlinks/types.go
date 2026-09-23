@@ -17,8 +17,10 @@ const configID = "partnerconfig01"
 // Options contains trusted server configuration. Auth collections must exist at Start.
 type Options struct {
 	// Attribution snapshots a trusted campaign source when a link is issued.
-	Attribution        func(core.App, *core.Record, string) (map[string]string, error)
-	AuthCollections    []string
+	Attribution     func(core.App, *core.Record, string) (map[string]string, error)
+	AuthCollections []string
+	// Deprecated: assignments are discovered automatically for all configured
+	// collections of the current user. This field no longer filters attribution.
 	VariantCollections []string
 	Managed            *ManagedConfig
 	// LockAdminConfig makes all settings read-only through HTTP, even for
@@ -91,6 +93,8 @@ type ResolveResponse struct {
 }
 
 type clickData struct {
+	Exposures            []variants.Exposure `json:"exposures,omitempty"`
+	AttributionBasis     string              `json:"attributionBasis,omitempty"`
 	Push                 map[string]string   `json:"push,omitempty"`
 	ClickID              string              `json:"clickId"`
 	UserID               string              `json:"userId"`

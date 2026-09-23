@@ -86,7 +86,7 @@ func ensureDemoVariants(app core.App) error {
 				Default: variants.Variant{Key: "default", Name: "Для всех"},
 				Variants: []variants.Variant{
 					{Key: "subscriber", Name: "Оплаченная подписка", Condition: &variants.Condition{Kind: "exists", Relation: subscriptions.Name + "_via_member", Children: []variants.Condition{{Kind: "all", Children: []variants.Condition{{Kind: "field", Field: "status", Op: "eq", Value: "active"}, {Kind: "field", Field: "paid", Op: "eq", Value: true}}}}}},
-					{Key: "premium", Name: "Premium", Condition: &variants.Condition{Kind: "field", Field: "tier", Op: "eq", Value: "premium"}, Experiments: []variants.Experiment{{Key: "offer_layout", Name: "Формат подборки", Active: true, Groups: []variants.Group{{Key: "a", Name: "A — коротко", From: 1, To: 5000}, {Key: "b", Name: "B — подробно", From: 5001, To: 10000}}}}},
+					{Key: "premium", Name: "Premium", Condition: &variants.Condition{Kind: "field", Field: "tier", Op: "eq", Value: "premium"}, Experiments: []variants.Experiment{{Key: "offer_layout", Name: "Формат подборки", Distribution: "shared", Active: true, Groups: []variants.Group{{Key: "a", Name: "A — коротко", From: 1, To: 5000}, {Key: "b", Name: "B — подробно", From: 5001, To: 10000}}}}},
 					{Key: "newcomer", Name: "Новички", Condition: &variants.Condition{Kind: "field", Field: "tier", Op: "eq", Value: "new"}},
 				},
 			})

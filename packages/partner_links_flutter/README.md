@@ -56,3 +56,5 @@ fvm flutter test
 Widget-тесты не заменяют проверку реального партнёрского сайта на Android/iOS: file picker, внешние приложения и сохранение cookies зависят от ОС и сайта.
 
 Запускаемое приложение Android/iOS/web: [partner_links_app](../../examples/partner_links_app/README.md).
+
+`VariantExposure.fromRecord(record)` читает подписанный variantContext. Передайте список в `resolvePartnerLink(exposures: shown)` / `openPartnerLink(exposures: shown)` для привязки к показанному материалу. Сервер проверяет tokens; нижний пакет сам показ не отправляет. [Воронки](../../docs/EXPERIMENT_FUNNELS.md).

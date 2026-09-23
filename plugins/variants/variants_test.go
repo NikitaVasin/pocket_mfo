@@ -60,7 +60,7 @@ func newFixture(t *testing.T) *fixture {
 	base := core.NewRecord(c)
 	base.Set("title", "original")
 	must(t, app.Save(base))
-	cfg, err := Publish(app, Config{Collection: c.Id, AuthCollection: u.Id, Variables: true, Experiments: true, Default: Variant{Key: "default"}, Variants: []Variant{{Key: "premium", Name: "Premium", Condition: &Condition{Kind: "field", Field: "premium", Op: "eq", Value: true}, Experiments: []Experiment{{Key: "trial", Name: "Trial", Active: true, Groups: []Group{{Key: "a", Name: "A", From: 1, To: 5000}, {Key: "b", Name: "B", From: 5001, To: 10000}}}}}}})
+	cfg, err := Publish(app, Config{Collection: c.Id, AuthCollection: u.Id, Variables: true, Experiments: true, Default: Variant{Key: "default"}, Variants: []Variant{{Key: "premium", Name: "Premium", Condition: &Condition{Kind: "field", Field: "premium", Op: "eq", Value: true}, Experiments: []Experiment{{Key: "trial", Name: "Trial", Distribution: "shared", Active: true, Groups: []Group{{Key: "a", Name: "A", From: 1, To: 5000}, {Key: "b", Name: "B", From: 5001, To: 10000}}}}}}})
 	must(t, err)
 	u, err = app.FindCollectionByNameOrId(u.Id)
 	must(t, err)

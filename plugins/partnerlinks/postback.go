@@ -150,7 +150,9 @@ func (p *plugin) postback(r *core.RequestEvent) error {
 		return r.BadRequestError(err.Error(), nil)
 	}
 	if prov.SendRevenue && conversion.Status == prov.RevenueStatus {
-		payload, _ := json.Marshal(map[string]any{"clickData": data, "conversion": conversion, "experiments": data.AnalyticsExperiments})
+		attributes := analyticsAttributes(data)
+		attributes["conversion"] = conversion
+		payload, _ := json.Marshal(attributes)
 		if len(payload) > 30*1024 {
 			return r.BadRequestError("Revenue payload превышает 30 KiB", nil)
 		}
@@ -158,7 +160,7 @@ func (p *plugin) postback(r *core.RequestEvent) error {
 			return r.BadRequestError(err.Error(), nil)
 		}
 	}
-	if err = collect(r.App, token, timestamp, conversion); err != nil {
+	if err = collect(r.App, token, timestamp, conversion, prov.SendRevenue && conversion.Status == prov.RevenueStatus); err != nil {
 		if errors.Is(err, errExpiredConversation) {
 			return r.Error(410, err.Error(), nil)
 		}
@@ -167,11 +169,11 @@ func (p *plugin) postback(r *core.RequestEvent) error {
 		}
 		return r.Error(503, "Не удалось сохранить заказ", nil)
 	}
-	if err = p.send(r.Request.Context(), c, data, conversion.Status, timestamp, &conversion); err != nil {
+	if err = p.deliverOnce(r.Request.Context(), r.App, c, data, token, "event_"+conversion.Status); err != nil {
 		return r.JSON(http.StatusBadGateway, map[string]string{"error": "appmetrica_delivery_failed"})
 	}
 	if prov.SendRevenue && conversion.Status == prov.RevenueStatus {
-		if err = p.sendRevenue(r.Request.Context(), c, data, timestamp, conversion); err != nil {
+		if err = p.deliverOnce(r.Request.Context(), r.App, c, data, token, "revenue"); err != nil {
 			return r.JSON(http.StatusBadGateway, map[string]string{"error": "appmetrica_revenue_delivery_failed"})
 		}
 	}

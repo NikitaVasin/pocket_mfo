@@ -126,7 +126,7 @@ function pushPage() {
             button("Сохранить аудиторию", async () => {
                 s.audience = await api("audience_save", s.audience); s.dirty = false;
                 await load(); s.notice = "Аудитория сохранена.";
-            }, true));
+            }, true), deleteButton("audience"));
     }
     function audienceEditor() {
         if (!s.audience) return null;
@@ -147,7 +147,7 @@ function pushPage() {
                 s.campaign.allUsers ? t.p({ className: "txt-hint" }, "Все пользователи с доступными устройствами во всех подключённых коллекциях. Исключения, выбор последнего устройства и интервал между рассылками учитываются.") : null),
             s.campaign.allUsers ? null : multi("Получатели", s.data.audiences, s.campaign, "audienceIds"));
     }
-    function openPanel(kind, title, content, footer) {
+    function openPanel(kind, title, content, footer, secondaryFooter = null) {
         if (activeModal) return;
         const opener = document.activeElement;
         const titleID = `push-dialog-${++nextID}`;
@@ -179,11 +179,30 @@ function pushPage() {
                 () => s.error ? t.div({ role: "alert", className: "alert danger" }, s.error) : null,
                 () => s.notice ? t.div({ role: "status", className: "push-notice" }, s.notice) : null,
                 content),
-            t.footer({ className: "modal-footer" }, t.button({ type: "button", className: "btn secondary", disabled: () => s.busy, onclick: () => app.modals.close(modal) }, "Закрыть"), footer));
+            t.footer({ className: "modal-footer" }, t.button({ type: "button", className: "btn secondary", disabled: () => s.busy, onclick: () => app.modals.close(modal) }, "Закрыть"), secondaryFooter, footer));
         activeModal = modal;
         s.modalOpen = true;
         root.append(modal);
         app.modals.open(modal);
+    }
+    function deleteButton(kind) {
+        const label = kind === "campaign" ? "Удалить кампанию" : "Удалить аудиторию";
+        return () => s[kind]?.id ? t.button({ type: "button", className: "btn danger", disabled: () => s.busy,
+            onclick: () => {
+                const record = s[kind];
+                const saved = s.data[kind === "campaign" ? "campaigns" : "audiences"].find(item => item.id === record.id);
+                const message = kind === "campaign" ? "История отправок и аналитика сохранятся. Вернуть кампанию будет нельзя." : "Вернуть аудиторию будет нельзя. Используемые в кампаниях аудитории удалить нельзя.";
+                app.modals.confirm(`${label} «${saved?.name || record.name}»? ${message}`, () => run(async () => {
+                    await api(`${kind}_delete`, { id: record.id, version: record.version });
+                    s.dirty = false;
+                    // Reflect the successful deletion even if the subsequent refresh fails.
+                    const key = kind === "campaign" ? "campaigns" : "audiences";
+                    s.data[key] = s.data[key].filter(item => item.id !== record.id);
+                    app.modals.close(activeModal, true);
+                    await load();
+                    s.notice = kind === "campaign" ? "Кампания удалена. История отправок сохранена." : "Аудитория удалена.";
+                }), null, { yesButton: label, noButton: "Отмена" });
+            } }, label) : null;
     }
     function editCampaign(campaign) {
         s.campaign = campaign ? copy(campaign) : blankCampaign();
@@ -194,7 +213,7 @@ function pushPage() {
                 if (s.campaign.message.action === "app") s.campaign.message.target = "";
                 s.campaign = await api("campaign_save", s.campaign); s.dirty = false;
                 await load(); s.notice = "Кампания сохранена. Отправка ещё не запущена.";
-            }, true));
+            }, true), deleteButton("campaign"));
     }
     let analyticsRevision = 0;
     async function loadAnalytics() {

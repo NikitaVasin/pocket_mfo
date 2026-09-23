@@ -52,9 +52,15 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 	if !allowed {
 		return r.ForbiddenError("Auth-коллекция не подключена", nil)
 	}
-	var input struct{}
+	var input struct {
+		ExposureTokens []string `json:"exposureTokens"`
+	}
 	if err := decodeBody(r, &input); err != nil && err != io.EOF {
 		return r.BadRequestError("Запрос не должен содержать profileId или device", nil)
+	}
+	exposures, err := variants.VerifyExposures(r.Auth, input.ExposureTokens)
+	if err != nil {
+		return r.BadRequestError("Некорректный контекст показанного контента", nil)
 	}
 	c, err := Load(r.App)
 	if err != nil {
@@ -79,58 +85,96 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 		return r.NotFoundError("Провайдер недоступен", nil)
 	}
 
-	now := time.Now().Unix()
-	id := make([]byte, 16)
-	if _, err = rand.Read(id); err != nil {
-		return err
-	}
-	data := clickData{ClickID: base64.RawURLEncoding.EncodeToString(id), UserID: r.Auth.Id, AuthCollection: r.Auth.Collection().Id, ApplicationID: c.ApplicationID, LinkID: record.Id, ProviderID: prov.ID, Experiments: []variants.Decision{}, IssuedAt: now, OpenUntil: now + c.OpenTTLSeconds}
-	for _, collection := range p.options.VariantCollections {
-		cfg, err := variants.Load(r.App, collection)
-		if err != nil {
-			return r.InternalServerError("Не удалось загрузить конфигурацию экспериментов", nil)
+	var data clickData
+	var link dynamiclink.Value
+	err = r.App.RunInTransaction(func(tx core.App) error {
+		now := time.Now().Unix()
+		id := make([]byte, 16)
+		if _, err = rand.Read(id); err != nil {
+			return err
 		}
-		if cfg.AuthCollection != r.Auth.Collection().Id {
-			continue
-		}
-		d, err := variants.Resolve(r.App, cfg, r.Auth)
+		data = clickData{ClickID: base64.RawURLEncoding.EncodeToString(id), UserID: r.Auth.Id, AuthCollection: r.Auth.Collection().Id, ApplicationID: c.ApplicationID, LinkID: record.Id, ProviderID: prov.ID, Experiments: []variants.Decision{}, IssuedAt: now, OpenUntil: now + c.OpenTTLSeconds}
+		data.Experiments, err = variants.ResolveAll(tx, r.Auth)
 		if err != nil {
 			return r.InternalServerError("Не удалось определить эксперименты", nil)
 		}
-		data.Experiments = append(data.Experiments, d)
-	}
-	data.AnalyticsExperiments, err = variants.AnalyticsExperiments(r.App, data.Experiments)
-	if err != nil {
-		return r.InternalServerError("Не удалось подготовить эксперименты", nil)
-	}
-	if p.options.Attribution != nil {
-		data.Push, err = p.options.Attribution(r.App, r.Auth, record.Id)
+		data.AnalyticsExperiments, err = variants.AnalyticsExperiments(tx, data.Experiments)
 		if err != nil {
-			return r.InternalServerError("Не удалось определить источник перехода", nil)
+			return r.InternalServerError("Не удалось подготовить эксперименты", nil)
 		}
-	}
-	token, err := newToken()
+		currentDecisions := data.Experiments
+		data.AttributionBasis = "current_assignment"
+		if len(exposures) > 0 {
+			data.Exposures = exposures
+			data.AttributionBasis = "content_exposure"
+			// Attribute only explicitly supplied shown content, not unobserved tests.
+			data.Experiments = []variants.Decision{}
+			data.AnalyticsExperiments = map[string]string{}
+			seen := map[string]bool{}
+			for _, exposure := range exposures {
+				if exposure.Collection == dynamiclink.SettingsCollection {
+					// Opening behavior is executed now. A stale screen context must
+					// not label a different runtime policy as the old experiment.
+					current, err := tx.FindRecordById(exposure.Decision.Collection, exposure.Record)
+					if err != nil {
+						return r.Error(409, "Обновите настройки открытия и контекст экрана", nil)
+					}
+					revision, err := variants.ContentRevision(current)
+					if err != nil {
+						return err
+					}
+					matches := false
+					for _, decision := range currentDecisions {
+						if decision.Collection == exposure.Decision.Collection && decision.Set == exposure.Decision.Set && decision.Version == exposure.Decision.Version {
+							matches = true
+						}
+					}
+					if !matches || revision != exposure.Revision {
+						return r.Error(409, "Обновите настройки открытия и контекст экрана", nil)
+					}
+				}
+				if !seen[exposure.Decision.Collection] {
+					data.Experiments = append(data.Experiments, exposure.Decision)
+					seen[exposure.Decision.Collection] = true
+				}
+				for key, value := range exposure.Experiments {
+					data.AnalyticsExperiments[key] = value
+				}
+			}
+		}
+		if p.options.Attribution != nil {
+			data.Push, err = p.options.Attribution(tx, r.Auth, record.Id)
+			if err != nil {
+				return r.InternalServerError("Не удалось определить источник перехода", nil)
+			}
+		}
+		token, err := newToken()
+		if err != nil {
+			return r.BadRequestError(err.Error(), nil)
+		}
+		if prov.MaxTokenLength > 0 && len(token) > prov.MaxTokenLength {
+			return r.BadRequestError("clickData превышает лимит провайдера", nil)
+		}
+		link, err = opening(record)
+		if err != nil {
+			return r.BadRequestError("Некорректная партнёрская ссылка", nil)
+		}
+		if _, err = renderURL(prov, link.URL, token); err != nil {
+			return r.BadRequestError(err.Error(), nil)
+		}
+		link, err = dynamiclink.Apply(tx, r.Auth, link)
+		if err != nil {
+			return r.InternalServerError("Не удалось применить настройки Dynamic Link", nil)
+		}
+		if err = createConversation(tx, data, token); err != nil {
+			return r.Error(503, "Не удалось сохранить конверсию", nil)
+		}
+		link.URL = c.BaseURL + "/api/partnerlinks/r/" + token
+		return nil
+	})
 	if err != nil {
-		return r.BadRequestError(err.Error(), nil)
+		return err
 	}
-	if prov.MaxTokenLength > 0 && len(token) > prov.MaxTokenLength {
-		return r.BadRequestError("clickData превышает лимит провайдера", nil)
-	}
-	link, err := opening(record)
-	if err != nil {
-		return r.BadRequestError("Некорректная партнёрская ссылка", nil)
-	}
-	if _, err = renderURL(prov, link.URL, token); err != nil {
-		return r.BadRequestError(err.Error(), nil)
-	}
-	link, err = dynamiclink.Apply(r.App, r.Auth, link)
-	if err != nil {
-		return r.InternalServerError("Не удалось применить настройки Dynamic Link", nil)
-	}
-	if err = createConversation(r.App, data, token); err != nil {
-		return r.Error(503, "Не удалось сохранить конверсию", nil)
-	}
-	link.URL = c.BaseURL + "/api/partnerlinks/r/" + token
 	r.Response.Header().Set("Cache-Control", "no-store")
 	return r.JSON(200, ResolveResponse{ClickID: data.ClickID, ExpiresAt: time.Unix(data.OpenUntil, 0).UTC(), Link: link})
 }

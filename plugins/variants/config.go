@@ -105,6 +105,9 @@ func publish(app core.App, input Config, lockRules bool) (*Config, error) {
 			if target.Fields.GetByName(SetField) != nil {
 				return errInvalid("field %s already exists", SetField)
 			}
+			if target.Fields.GetByName(ExposureField) != nil {
+				return errInvalid("field %s is reserved for response context", ExposureField)
+			}
 			c.ListRule = target.ListRule
 			c.ViewRule = target.ViewRule
 		} else {
@@ -125,6 +128,7 @@ func publish(app core.App, input Config, lockRules bool) (*Config, error) {
 		if c.Default.Key != "default" || c.Default.Condition != nil {
 			return errInvalid("default cannot have a condition or another key")
 		}
+		normalizeDistributions(&c, old)
 		if c.Experiments && !c.Variables {
 			return errInvalid("experiments require variables")
 		}
@@ -303,6 +307,14 @@ func compileConfig(b *compiler, c *Config, auth *core.Collection) (string, error
 			return "", errInvalid("at most 30 experiments per variant")
 		}
 		for _, ex := range v.Experiments {
+			allocation := bucketExpr
+			switch ex.Distribution {
+			case "", "shared":
+			case "independent":
+				allocation = experimentBucketSQL + "(" + sqlString(c.AuthCollection) + ", u.id, " + sqlString(c.Collection) + ", " + sqlString(v.Key) + ", " + sqlString(ex.Key) + ")"
+			default:
+				return "", errInvalid("unknown experiment distribution")
+			}
 			if !validKey.MatchString(ex.Key) || exKeys[ex.Key] {
 				return "", errInvalid("experiment keys must be unique within variant")
 			}
@@ -330,7 +342,7 @@ func compileConfig(b *compiler, c *Config, auth *core.Collection) (string, error
 					occupied[i] = true
 				}
 				if c.Variables && c.Experiments && ex.Active {
-					arms = append(arms, fmt.Sprintf("WHEN %s BETWEEN %d AND %d THEN %s", bucketExpr, g.From, g.To, sqlString(setID(c.Collection, v.Key, ex.Key, g.Key))))
+					arms = append(arms, fmt.Sprintf("WHEN %s BETWEEN %d AND %d THEN %s", allocation, g.From, g.To, sqlString(setID(c.Collection, v.Key, ex.Key, g.Key))))
 				}
 			}
 		}

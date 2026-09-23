@@ -97,6 +97,7 @@ func migrateConversations(app core.App, c *core.Collection) error {
 		status.Values = append(status.Values, "pending")
 	}
 	fields := []core.Field{
+		&core.JSONField{Name: deliveryField, Hidden: true, MaxSize: 262144},
 		&core.TextField{Name: "tokenHash", Hidden: true, Max: 64},
 		&core.JSONField{Name: "clickData", MaxSize: 262144},
 		&core.NumberField{Name: "statusChangedAt", OnlyInt: true},
@@ -110,7 +111,7 @@ func migrateConversations(app core.App, c *core.Collection) error {
 		if old := c.Fields.GetByName(f.GetName()); old == nil {
 			c.Fields.Add(f)
 			changed = true
-		} else if old.Type() != f.Type() || (f.GetName() == "tokenHash" && !old.GetHidden()) {
+		} else if old.Type() != f.Type() || ((f.GetName() == "tokenHash" || f.GetName() == deliveryField) && !old.GetHidden()) {
 			return fmt.Errorf("partnerlinks: incompatible conversations field %s", f.GetName())
 		}
 	}
@@ -162,6 +163,7 @@ func createConversation(app core.App, data clickData, token string) error {
 		r.Set("clickTimestamp", data.IssuedAt)
 		r.Set("statusChangedAt", data.IssuedAt)
 		r.Set("status", "pending")
+		r.Set(deliveryField, deliveryState{Version: 1, Items: map[string]deliveryItem{}})
 		r.Set("clickData", data)
 		r.Set("tokenHash", digest)
 		return save(tx, r)
@@ -196,7 +198,7 @@ func expiredConversation(r *core.Record, c *Config, now int64) bool {
 	return days > 0 && now >= start+int64(days)*86400
 }
 
-func collect(app core.App, token string, timestamp int64, conversion conversionData) error {
+func collect(app core.App, token string, timestamp int64, conversion conversionData, revenue bool) error {
 	lead, status := conversion.LeadID, conversion.Status
 	return app.RunInTransaction(func(tx core.App) error {
 		r, data, err := loadConversation(tx, token)
@@ -209,6 +211,10 @@ func collect(app core.App, token string, timestamp int64, conversion conversionD
 		}
 		if expiredConversation(r, cfg, time.Now().Unix()) {
 			return errExpiredConversation
+		}
+		delivery, err := readDelivery(r)
+		if err != nil {
+			return err
 		}
 		if lead != "" {
 			if current := r.GetString("leadId"); current != "" && current != lead {
@@ -251,6 +257,7 @@ func collect(app core.App, token string, timestamp int64, conversion conversionD
 		if len(conversion.Extra) > 0 {
 			r.Set("extra", conversion.Extra)
 		}
+		prepareDelivery(r, delivery, conversion, timestamp, revenue)
 		return save(tx, r)
 	})
 }

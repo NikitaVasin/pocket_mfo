@@ -715,3 +715,69 @@ for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
         expect(errors).toEqual([]);
     });
 }
+
+test('push deletes saved campaigns and unused audiences with confirmation and conflict errors', async ({ page }, testInfo) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await openPlugin(page, '#/push');
+    const saved = await page.evaluate(async () => {
+        const call = (action, body) => app.pb.send(`/api/push/admin/${action}`, { method: 'POST', body });
+        const state = await app.pb.send('/api/push/admin/state');
+        const audience = await call('audience_save', { name: 'Delete audience', version: 0, authCollection: state.authCollections[0] });
+        const campaign = await call('campaign_save', { name: 'Delete campaign', version: 0, audienceIds: [audience.id], message: { title: 'Test', text: 'Test', action: 'app' } });
+        return { audience, campaign };
+    });
+    await page.reload();
+    const push = page.locator('.push-page');
+    const dialog = push.getByRole('dialog');
+    const confirmation = page.locator('.modal.popup');
+    await push.getByRole('button', { name: 'Новая кампания', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Удалить кампанию', exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await push.getByRole('button', { name: 'Аудитории', exact: true }).click();
+    const audienceCard = push.locator('.push-audience-card').filter({ hasText: 'Delete audience' });
+    await audienceCard.getByRole('button', { name: 'Редактировать', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Удалить аудиторию', exact: true }).click();
+    await expect(confirmation).toContainText('Delete audience');
+    await confirmation.getByRole('button', { name: 'Удалить аудиторию', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('используется в кампании');
+    await expect(audienceCard).toHaveCount(1);
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await push.getByRole('button', { name: 'Кампании', exact: true }).click();
+    const campaignCard = push.locator('.push-campaign-card').filter({ hasText: 'Delete campaign' });
+    await campaignCard.getByRole('button', { name: 'Редактировать', exact: true }).click();
+    for (const theme of ['light', 'dark']) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        await dialog.getByRole('button', { name: 'Удалить кампанию', exact: true }).click();
+        await expect(confirmation).toContainText('История отправок и аналитика сохранятся');
+        await page.screenshot({ path: testInfo.outputPath(`delete-confirm-${theme}.png`) });
+        await confirmation.getByRole('button', { name: 'Отмена', exact: true }).click();
+        await expect(dialog).toBeVisible();
+        await expect(campaignCard).toHaveCount(1);
+    }
+    await page.evaluate(campaign => app.pb.send('/api/push/admin/campaign_save', { method: 'POST', body: { ...campaign, name: 'Delete campaign updated' } }), saved.campaign);
+    await dialog.getByRole('button', { name: 'Удалить кампанию', exact: true }).click();
+    await confirmation.getByRole('button', { name: 'Удалить кампанию', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('изменена другим запросом');
+    await page.reload();
+    await campaignCard.getByRole('button', { name: 'Редактировать', exact: true }).click();
+    await dialog.getByLabel('Название кампании', { exact: true }).fill('Unsaved edit');
+    await page.setViewportSize({ width: 390, height: 850 });
+    await expect(dialog.getByRole('button', { name: 'Удалить кампанию', exact: true })).toBeInViewport();
+    await dialog.getByRole('button', { name: 'Удалить кампанию', exact: true }).click();
+    await expect(confirmation).toContainText('Delete campaign updated');
+    await confirmation.getByRole('button', { name: 'Удалить кампанию', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(campaignCard).toHaveCount(0);
+    await push.getByRole('button', { name: 'Аудитории', exact: true }).click();
+    await audienceCard.getByRole('button', { name: 'Редактировать', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Удалить аудиторию', exact: true }).click();
+    await confirmation.getByRole('button', { name: 'Удалить аудиторию', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(audienceCard).toHaveCount(0);
+    await page.reload();
+    const state = await page.evaluate(() => app.pb.send('/api/push/admin/state'));
+    expect(state.campaigns.some(c => c.id === saved.campaign.id)).toBe(false);
+    expect(state.audiences.some(a => a.id === saved.audience.id)).toBe(false);
+    expect(errors).toEqual([]);
+});

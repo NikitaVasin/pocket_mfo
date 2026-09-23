@@ -7,6 +7,7 @@ import (
 	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/NikitaVasin/pocket_mfo/plugins/schemalock"
 	"github.com/NikitaVasin/pocket_mfo/plugins/singleton"
+	"github.com/NikitaVasin/pocket_mfo/plugins/typedconfig"
 	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -20,6 +21,7 @@ func TestStandardGuestAuthAndUsersRename(t *testing.T) {
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	polymorphicrelation.Register(app)
 	variants.Register(app)
+	typedconfig.Register(app)
 	singleton.Register(app)
 	partnerlinks.Register(app, partnerlinks.Options{AuthCollections: []string{"users"}})
 	schemalock.Register(app)

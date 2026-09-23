@@ -88,15 +88,16 @@ func TestRevenueSelectedStatusAndValidationBeforeSideEffects(t *testing.T) {
 			if !reflect.DeepEqual(gotExperiments, click.AnalyticsExperiments) {
 				t.Fatal("Revenue lost experiment snapshot")
 			}
-			// Failure is retryable; no success is reported if Revenue was rejected.
+			// A receipt prevents a duplicate request even if the provider is down.
+			before := x.eventCount()
 			x.mu.Lock()
 			x.revenueStatus = 503
 			x.mu.Unlock()
 			q.Set("status", rawRevenueStatus)
 			q.Set("amount", "123.45000001")
 			q.Set("currency", "RUB")
-			if code := post(); code != 502 {
-				t.Fatalf("failure %d", code)
+			if code := post(); code != 200 || x.eventCount() != before {
+				t.Fatalf("duplicate was sent again: %d", code)
 			}
 
 		})

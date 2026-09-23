@@ -4,6 +4,7 @@ import (
 	"github.com/NikitaVasin/pocket_mfo/plugins/partnerlinks"
 	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/NikitaVasin/pocket_mfo/plugins/singleton"
+	"github.com/NikitaVasin/pocket_mfo/plugins/typedconfig"
 	"github.com/NikitaVasin/pocket_mfo/plugins/variants"
 	"github.com/pocketbase/pocketbase"
 	"testing"
@@ -13,6 +14,7 @@ func TestDemoSingleton(t *testing.T) {
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	polymorphicrelation.Register(app)
 	variants.Register(app)
+	typedconfig.Register(app)
 	singleton.Register(app)
 	partnerlinks.Register(app, partnerlinks.Options{})
 	check := func(err error) {

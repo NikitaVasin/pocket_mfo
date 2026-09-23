@@ -209,12 +209,16 @@ func (p *Plugin) SaveCampaign(app core.App, in Campaign) (Campaign, error) {
 	if err := validateMessage(in.Message); err != nil {
 		return in, err
 	}
-	for _, id := range append(slices.Clone(in.AudienceIDs), in.ExcludeAudienceIDs...) {
-		if _, err := app.FindRecordById(AudiencesCollection, id); err != nil {
-			return in, textError("аудитория не найдена")
+	err := app.RunInTransaction(func(tx core.App) error {
+		// Validate references in the same transaction as saving: deletion must not
+		// race a campaign save and leave a dangling audience or exclusion.
+		for _, id := range append(slices.Clone(in.AudienceIDs), in.ExcludeAudienceIDs...) {
+			if _, err := tx.FindRecordById(AudiencesCollection, id); err != nil {
+				return textError("аудитория не найдена")
+			}
 		}
-	}
-	err := saveDefinition(app, CampaignsCollection, &in.ID, &in.Version, in.Name, func() any { return in })
+		return saveDefinition(tx, CampaignsCollection, &in.ID, &in.Version, in.Name, func() any { return in })
+	})
 	return in, err
 }
 func validateMessage(m Message) error {

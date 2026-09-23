@@ -139,6 +139,13 @@ test("variant editor has progressive disclosure and compact condition rows", asy
     await page.locator(".select-option:visible").filter({ hasText: /^Любое условие \(ИЛИ\)$/ }).click();
     await premium.locator(".pv-experiment > summary").click();
     await expect(premium.getByLabel("Название эксперимента", { exact: true })).toBeVisible();
+    for (const theme of ["light", "dark"]) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        await expect(premium.getByLabel("Распределение пользователей", { exact: true })).toBeVisible();
+    }
+    await premium.getByLabel("Распределение пользователей", { exact: true }).click();
+    await page.locator(".select-option:visible").filter({ hasText: /^Независимое для этого эксперимента$/ }).click();
+
     await subscriber.locator(":scope > summary").click();
     await subscriber.locator('[data-pv-section="subscriber/condition"] > summary').click();
     await subscriber.locator('[data-pv-section="subscriber/condition/related"] > summary').click();
@@ -158,6 +165,7 @@ test("variant editor has progressive disclosure and compact condition rows", asy
     await expect(editor.locator('p[role="status"]')).toHaveText("Опубликовано, версия 2");
     const config = await page.evaluate(async cid => (await app.pb.send(`/api/variants/admin/collections/${cid}`)).config, cid);
     expect(config.variants[1].name).toBe("Premium renamed");
+    expect(config.variants[1].experiments[0].distribution).toBe("independent");
     expect(config.variants[1].condition.kind).toBe("any");
     expect(config.variants[1].condition.children.map(c => c.value)).toEqual(["premium", "new"]);
     expect(config.variants[0].condition.children[0].children[1].value).toBe(false);

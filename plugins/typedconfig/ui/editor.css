@@ -1,0 +1,41 @@
+/* Native PocketBase surfaces, 4px spacing scale, compact 16px card padding. */
+.tc-editor { min-width: 0; }
+.tc-heading, .tc-toolbar, .tc-property-header, .tc-actions, .tc-type-list { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tc-heading { justify-content: space-between; margin-bottom: 8px; }
+.tc-toolbar { margin: 16px 0; }
+.tc-toolbar > :first-child { flex: 1; min-width: 160px; }
+.tc-cards { display: flex; flex-direction: column; gap: 12px; }
+.tc-card { border: 1px solid var(--surfaceAlt2Color); border-radius: 8px; background: var(--surfaceColor); }
+.tc-card > summary { display: flex; gap: 12px; align-items: center; list-style: none; padding: 16px; cursor: pointer; }
+.tc-card > summary::-webkit-details-marker { display: none; }
+.tc-card > summary:focus-visible { outline: 2px solid var(--primaryColor); outline-offset: 2px; }
+.tc-card > summary:hover { background: var(--surfaceAlt1Color); border-radius: 8px; }
+.tc-number { font-variant-numeric: tabular-nums; color: var(--surfaceTxtHintColor); }
+.tc-card-heading { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.tc-card-heading > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tc-card-body > p { margin: 0; }
+.tc-card-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 16px; }
+.tc-property { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tc-property-content { min-width: 0; }
+.tc-property-header { justify-content: space-between; }
+.tc-property-header > label, .tc-property-title { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.tc-editor .tc-input, .tc-editor .tc-toggle { margin: 0; min-width: 0; }
+.tc-editor .tc-toggle > label { position: relative; }
+.tc-editor .tc-enable { flex-shrink: 0; width: auto; }
+.tc-nested > .tc-property, .tc-input { width: 100%; }
+.tc-nested { padding-left: 16px; border-left: 2px solid var(--surfaceAlt2Color); display: flex; flex-direction: column; gap: 12px; }
+.tc-source { padding: 12px; border: 1px solid var(--surfaceAlt2Color); border-radius: var(--borderRadius); overflow-wrap: anywhere; display: flex; align-items: flex-start; flex-direction: column; gap: 8px; }
+.tc-source .field-help { margin: 0; }
+.tc-array-item { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.tc-actions { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--surfaceAlt2Color); }
+.tc-actions > button, .tc-toolbar > button { min-height: 40px; }
+.tc-empty { padding: 24px 16px; text-align: center; color: var(--surfaceTxtHintColor); background: var(--surfaceAlt1Color); border-radius: 8px; }
+.tc-preview { display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
+.tc-preview-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tc-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media(max-width: 480px) {
+    .tc-card > summary { padding: 12px; }
+    .tc-card-body { padding: 0 12px 12px; }
+}
+
+.tc-actions > button { min-width: 104px; white-space: nowrap; flex: 1 1 104px; }

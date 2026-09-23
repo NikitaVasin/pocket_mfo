@@ -45,6 +45,9 @@ type Experiment struct {
 	Name   string  `json:"name"`
 	Active bool    `json:"active"`
 	Groups []Group `json:"groups"`
+	// Empty means legacy shared allocation when reading persisted configurations.
+	// Publish defaults newly introduced experiments to independent allocation.
+	Distribution string `json:"distribution,omitempty"`
 }
 type Variant struct {
 	Key         string       `json:"key"`
@@ -65,14 +68,15 @@ type Config struct {
 	ViewRule *string   `json:"viewRule"`
 }
 type Decision struct {
-	Collection string `json:"collection"`
-	Variant    string `json:"variant"`
-	Experiment string `json:"experiment,omitempty"`
-	Group      string `json:"group,omitempty"`
-	Set        string `json:"set"`
-	Version    int    `json:"version"`
-	Bucket     int    `json:"bucket"`
-	Reason     string `json:"reason"`
+	Collection       string `json:"collection"`
+	Variant          string `json:"variant"`
+	Experiment       string `json:"experiment,omitempty"`
+	Group            string `json:"group,omitempty"`
+	Set              string `json:"set"`
+	Version          int    `json:"version"`
+	Bucket           int    `json:"bucket"`
+	ExperimentBucket int    `json:"experimentBucket,omitempty"`
+	Reason           string `json:"reason"`
 }
 
 type internalKey struct{}

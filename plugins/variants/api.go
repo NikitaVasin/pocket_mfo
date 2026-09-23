@@ -54,6 +54,17 @@ func Resolve(app core.App, c *Config, user *core.Record) (Decision, error) {
 	}
 	if d.Experiment != "" {
 		d.Reason = "experiment_bucket"
+		d.ExperimentBucket = bucket
+		for _, v := range append([]Variant{c.Default}, c.Variants...) {
+			if v.Key != d.Variant {
+				continue
+			}
+			for _, ex := range v.Experiments {
+				if ex.Key == d.Experiment && ex.Distribution == "independent" {
+					d.ExperimentBucket = ExperimentBucket(c.AuthCollection, user.Id, c.Collection, v.Key, ex.Key)
+				}
+			}
+		}
 	}
 	return d, nil
 }

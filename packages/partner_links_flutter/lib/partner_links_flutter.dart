@@ -6,3 +6,4 @@ export 'package:dynamic_link_flutter/dynamic_link_flutter.dart';
 
 export 'src/partner_link_result.dart';
 export 'src/pocketbase_partner_links.dart';
+export 'src/variant_exposure.dart';

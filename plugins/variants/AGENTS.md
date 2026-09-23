@@ -36,3 +36,5 @@ return err
 - Основные файлы: `config.go` — публикация/схема, `conditions.go` — компилятор, `plugin.go` — хуки, `api.go` — решение/история/HTTP, `admin_policy.go` — запрет редактирования правил.
 
 Проверки: `go test -race ./plugins/variants ./plugins/singleton ./plugins/schemalock` и `npx playwright test variants.spec.js singleton.spec.js schemalock.spec.js`. Сохраняйте проверки границ бакетов, same-row exists, конкурентной публикации, отката, изоляции auth-коллекций и защищённого режима.
+
+Новые эксперименты используют distribution=independent и ExperimentBucket по пользователю и идентичности эксперимента. Прежние пустые distribution означают shared: не перераспределяйте их молча. SQL-функция и Go должны совпадать. variantContext — зарезервированное несохраняемое поле; подпись привязана к пользователю, срок 24 часа. Получение контента не равно показу: см. [контракт воронок](../../docs/EXPERIMENT_FUNNELS.md).

@@ -74,6 +74,11 @@ func Register(app core.App) {
 		if err := e.Next(); err != nil {
 			return err
 		}
+		if e.RequestInfo != nil {
+			if err := enrichExposure(e.App, e.RequestInfo.Auth, e.Record); err != nil {
+				return err
+			}
+		}
 		// Observe the final HTTP record tree once. Expanded records are visited by
 		// their root so realtime expansions don't accidentally create HTTP history.
 		if e.RequestInfo != nil && e.RequestInfo.Context != core.RequestInfoContextRealtime && e.RequestInfo.Context != core.RequestInfoContextExpand {
@@ -264,6 +269,9 @@ func collectionUpdate(e *core.CollectionEvent) error {
 				}
 			}
 			if c.Collection == e.Collection.Id {
+				if e.Collection.Fields.GetByName(ExposureField) != nil {
+					return errInvalid("variantContext is reserved for response metadata")
+				}
 				before := oldCollection
 				a := e.Collection.Fields.GetByName(SetField)
 				b := before.Fields.GetByName(SetField)

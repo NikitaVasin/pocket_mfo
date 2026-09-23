@@ -143,6 +143,103 @@ void main() {
   });
   tearDown(() => app.dispose());
 
+  VariantExposure shown({String? user, String set = 'shown-set'}) =>
+      VariantExposure.fromJson({
+        'id': 'exposure-1',
+        'token': 'signed-context',
+        'user': user ?? app.user!.id,
+        'authCollection': 'userscollection',
+        'collection': 'offers',
+        'record': 'shown-record',
+        'revision': 'revision-1',
+        'decision': {'set': set, 'version': 1},
+        'experiments': {'offers': 'default/design/A'},
+      });
+
+  test(
+    'shown content keeps funnel attribution after assignments refresh',
+    () async {
+      await app.initialize();
+      final exposure = shown();
+      backend.assignments = {
+        'offers': 'default/design/B',
+        'unseen': 'default/test/B',
+      };
+      await app.refreshExperiments();
+      await app.reportEvent('screen_view', exposures: [exposure]);
+      await app.reportEvent(
+        'offer_tap',
+        exposures: [exposure],
+        parameters: {'experiments': 'forged'},
+      );
+      for (final event in analytics.events) {
+        expect(event['experiments'], {'offers': 'default/design/A'});
+        expect(event['attributionBasis'], 'content_exposure');
+        expect(jsonEncode(event), isNot(contains('signed-context')));
+        expect(event['id'], app.user!.id);
+      }
+      backend.delayedLink = Completer<http.Response>();
+      backend.delayedLink!.complete(
+        backend.json({
+          'clickId': 'click-1',
+          'expiresAt': '2026-09-24T00:00:00Z',
+          'link': {
+            'url': 'https://links.example/r/token',
+            'mode': 'appView',
+            'saveCooke': true,
+            'changeClient': false,
+            'showLoader': true,
+            'openUrlsInBrowser': false,
+            'skipWarningDialog': false,
+          },
+        }),
+      );
+      final result = await app.resolvePartnerLink(
+        linkId: 'offer',
+        exposures: [exposure],
+      );
+      expect(result.clickId, 'click-1');
+      expect(jsonDecode(backend.requests.last.body), {
+        'exposureTokens': ['signed-context'],
+      });
+      expect(
+        backend.requests.where((r) => r.url.host == 'links.example'),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'foreign and conflicting shown contexts fail before events or resolve',
+    () async {
+      await app.initialize();
+      final count = backend.requests.length;
+      await expectLater(
+        app.reportExposure(shown(user: 'another-user')),
+        throwsStateError,
+      );
+      await expectLater(
+        app.reportEvent(
+          'tap',
+          exposures: [
+            shown(),
+            shown(set: 'other'),
+          ],
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        app.resolvePartnerLink(
+          linkId: 'offer',
+          exposures: [shown(user: 'another-user')],
+        ),
+        throwsStateError,
+      );
+      expect(analytics.events, isEmpty);
+      expect(backend.requests.length, count);
+    },
+  );
+
   test(
     'concurrent initialize creates one guest, preserves client authStore',
     () async {

@@ -8,6 +8,7 @@
 | --- | --- |
 | [Polymorphic Relation](plugins/polymorphicrelation) | Одно поле с одним родителем из нескольких коллекций; штатные relation-столбцы, нативная админка, `expand` |
 | [Variants](plugins/variants) | Варианты контента по аудитории, эксперименты по бакетам, нативные API rules/realtime, текущие назначения и история |
+| [Typed Config](plugins/typedconfig) | Типизированные экранные блоки, формы и карточки, ссылки с mapping и каскадом, генерация Dart DTO |
 | [Singleton](plugins/singleton) | Одна запись на коллекцию или набор Variants; включение в админке, форма вместо таблицы |
 | [Dynamic Link](plugins/dynamiclink) | Переиспользуемое поле с URL и настройками WebView/браузера |
 | [Partner Links](plugins/partnerlinks) | Партнёрские ссылки с хранением конверсий, настройки провайдеров, постбеки AppMetrica и Flutter-клиент |
@@ -58,6 +59,8 @@ GOTOOLCHAIN=auto go run ./example serve --http=127.0.0.1:8090 --dir=./example/pb
 ```
 
 И локальный запуск, и Docker собирают плагины из **этого checkout**. Импорты `github.com/NikitaVasin/pocket_mfo/plugins/...` совпадают с module path в корневом go.mod и разрешаются в локальные `plugins/...`; копия этих плагинов с GitHub не скачивается. При первой сборке Go может скачать внешние зависимости и нужную версию toolchain. Отдельный go.mod или replace для example не требуется.
+
+В example также есть `demo_screen_configs → Главная витрина`: редактор типизированных блоков без JSON. [Документация](plugins/typedconfig/README.md).
 
 ## Подключение
 

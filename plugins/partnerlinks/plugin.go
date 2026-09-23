@@ -34,7 +34,6 @@ func Register(app core.App, options Options) {
 func register(app core.App, options Options, client *http.Client) {
 	polymorphicrelation.Register(app, polymorphicrelation.Options{SystemCollections: []string{ConversationsCollection}})
 	options.AuthCollections = slices.Clone(options.AuthCollections)
-	options.VariantCollections = slices.Clone(options.VariantCollections)
 	setManaged(app, options.Managed)
 	app.Store().Set(adminLockStoreKey, options.LockAdminConfig)
 	p := &plugin{options: options, client: client}
@@ -105,6 +104,7 @@ func register(app core.App, options Options, client *http.Client) {
 		// PocketBase automatically unhides fields for superusers during enrich.
 		if e.Record.Collection().Name == ConversationsCollection {
 			e.Record.Hide("tokenHash")
+			e.Record.Hide(deliveryField)
 		}
 		return nil
 	}})

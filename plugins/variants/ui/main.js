@@ -332,6 +332,7 @@ function pvExperiments(variant, enabled, state) {
             () => `${ex.active && enabled() ? "Активен" : "Неактивен"} · ${ex.groups.length} группы`,
             t.div(null,
             pvInput("Название эксперимента", () => ex.name, v => ex.name = v),
+            pvSelect("Распределение пользователей", [{ value: "independent", label: "Независимое для этого эксперимента" }, { value: "shared", label: "Общий бакет (совместимость)" }], () => ex.distribution || "shared", v => ex.distribution = v),
             pvCheck("Активный эксперимент", () => ex.active, v => { if (v) variant.experiments.forEach(e => e.active = false); ex.active = v; }, () => !enabled()),
             () => ex.groups.map((g, gi) => t.div({ className: "grid" },
                 t.div({ className: "col-sm-4" }, pvInput("Название группы", () => g.name, v => g.name = v)),
@@ -350,7 +351,7 @@ function pvExperiments(variant, enabled, state) {
             variant.experiments ||= [];
             const key = pvKey("e");
             state.expanded[`${variant.key}/experiment/${key}`] = true;
-            variant.experiments.push({ key, name: "Эксперимент", active: !variant.experiments.some(e => e.active), groups: [{ key: "a", name: "A", from: 1, to: 5000 }, { key: "b", name: "B", from: 5001, to: 10000 }] });
+            variant.experiments.push({ key, name: "Эксперимент", distribution: "independent", active: !variant.experiments.some(e => e.active), groups: [{ key: "a", name: "A", from: 1, to: 5000 }, { key: "b", name: "B", from: 5001, to: 10000 }] });
         }, () => !enabled()));
 }
 

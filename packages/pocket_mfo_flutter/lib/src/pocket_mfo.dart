@@ -443,12 +443,18 @@ final class PocketMfo with WidgetsBindingObserver {
   Future<void> reportEvent(
     String name, {
     Map<String, Object?> parameters = const {},
+    List<VariantExposure>? exposures,
   }) async {
     if (name.trim().isEmpty) throw ArgumentError.value(name, 'name');
     // Deep copy immediately so application mutations during initialize cannot
     // change an already requested event.
     final copy = (jsonDecode(jsonEncode(parameters)) as Map<String, dynamic>)
-      ..remove('experiments');
+      ..remove('experiments')
+      ..remove('exposures')
+      ..remove('attributionBasis');
+    final shown = exposures == null
+        ? null
+        : List<VariantExposure>.of(exposures);
     await initialize();
     await _serial(() async {
       await _syncAnalytics();
@@ -457,20 +463,65 @@ final class PocketMfo with WidgetsBindingObserver {
         throw const PocketMfoAuthRequired();
       }
       _noticeIdentity();
-      if (_experiments != null) {
+      if (shown != null) {
+        _validateExposures(shown);
+        copy['experiments'] = {
+          for (final exposure in shown) ...exposure.experiments,
+        };
+        copy['exposures'] = shown.map((e) => e.analyticsParameters).toList();
+        copy['attributionBasis'] = 'content_exposure';
+      } else if (_experiments != null) {
         copy['experiments'] = Map<String, String>.of(_experiments!);
+        copy['attributionBasis'] = 'current_assignment';
       }
       await analytics.reportEvent(name, copy);
     });
   }
 
-  Future<PartnerLinkResult> resolvePartnerLink({required String linkId}) async {
+  /// Call when content actually becomes visible, not when it is prefetched.
+  Future<void> reportExposure(
+    VariantExposure exposure, {
+    Map<String, Object?> parameters = const {},
+  }) => reportEvent(
+    'content_exposure',
+    parameters: parameters,
+    exposures: [exposure],
+  );
+
+  void _validateExposures(List<VariantExposure> exposures) {
+    if (exposures.length > 30) {
+      throw ArgumentError('At most 30 exposure contexts');
+    }
+    final assignments = <String, String>{};
+    for (final exposure in exposures) {
+      if (exposure.user != user?.id ||
+          exposure.authCollection != user?.collectionId) {
+        throw StateError('Exposure belongs to another user');
+      }
+      final assignment = '${exposure.set}/${exposure.version}';
+      final previous = assignments[exposure.collection];
+      if (previous != null && previous != assignment) {
+        throw ArgumentError('Conflicting exposure assignments');
+      }
+      assignments[exposure.collection] = assignment;
+    }
+  }
+
+  Future<PartnerLinkResult> resolvePartnerLink({
+    required String linkId,
+    List<VariantExposure> exposures = const [],
+  }) async {
+    final shown = List<VariantExposure>.of(exposures);
     await initialize();
     return _serial(() async {
       if (!_valid) throw const PocketMfoAuthRequired();
       _noticeIdentity();
       final epoch = _epoch;
-      final result = await pocketBase.resolvePartnerLink(linkId: linkId);
+      _validateExposures(shown);
+      final result = await pocketBase.resolvePartnerLink(
+        linkId: linkId,
+        exposures: shown,
+      );
       if (_disposed || !_valid) throw const PocketMfoAuthRequired();
       _noticeIdentity();
       if (_epoch != epoch) throw const PocketMfoAuthRequired();
@@ -481,11 +532,15 @@ final class PocketMfo with WidgetsBindingObserver {
   Future<bool> openPartnerLink(
     BuildContext context, {
     required String linkId,
+    List<VariantExposure> exposures = const [],
     DynamicLinkActions actions = const PlatformDynamicLinkActions(),
     DynamicLinkEmbeddedViewBuilder? embeddedViewBuilder,
     DynamicLinkWarningDialogBuilder? warningDialogBuilder,
   }) async {
-    final result = await resolvePartnerLink(linkId: linkId);
+    final result = await resolvePartnerLink(
+      linkId: linkId,
+      exposures: exposures,
+    );
     if (_disposed || !context.mounted) return false;
     return result.link.open(
       context,

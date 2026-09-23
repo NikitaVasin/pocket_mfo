@@ -191,6 +191,21 @@ func (p *Plugin) call(ctx context.Context, app core.App, action string, args jso
 			return nil, err
 		}
 		return p.AudienceFields(app), nil
+	case "audience_delete", "campaign_delete":
+		var in struct {
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+		}
+		if err := decode(&in); err != nil {
+			return nil, err
+		}
+		var err error
+		if action == "audience_delete" {
+			err = p.DeleteAudience(app, in.ID, in.Version)
+		} else {
+			err = p.DeleteCampaign(app, in.ID, in.Version)
+		}
+		return map[string]bool{"deleted": err == nil}, err
 	case "audience_save":
 		var in Audience
 		if err := decode(&in); err != nil {
@@ -282,9 +297,11 @@ func (p *Plugin) MCPTools() []mcp.Tool {
 	}{
 		{"fields", "Поля для условий аудитории. kind: all/any/not с children; field с source user/device/conversion, field, op eq/ne/gt/gte/lt/lte/empty/withinHours/olderHours, value; conversion с одним children (условия одной заявки); variant с collection, variant, experiment, group.", mcp.Object(map[string]any{}), true, true},
 		{"audiences", "Сохранённые аудитории", mcp.Object(map[string]any{}), true, true},
+		{"audience_delete", "Удалить неиспользуемую аудиторию по id и актуальной version; снимки запусков сохраняются", mcp.Object(map[string]any{"id": str, "version": num}, "id", "version"), false, false},
 		{"audience_save", "Создать/изменить аудиторию с контролем version; ручные userIds ограничивают выборку, excludeUserIds исключают.", audience, false, false},
 		{"audience_preview", "Подсчитать аудиторию без сохранения", audience, true, true},
 		{"campaigns", "Сохранённые кампании; создание не запускает отправку", mcp.Object(map[string]any{}), true, true},
+		{"campaign_delete", "Удалить кампанию по id и актуальной version, сохранив историю и аналитику. Незавершённые рассылки блокируют удаление", mcp.Object(map[string]any{"id": str, "version": num}, "id", "version"), false, false},
 		{"campaign_save", "Сохранить черновик кампании; version=0 для новой. Получатели: allUsers=true или непустой audienceIds. Сохранение не запускает отправку", campaign, false, false},
 		{"preview", "Количество пользователей и устройств кампании", mcp.Object(map[string]any{"campaignId": str}, "campaignId"), true, true},
 		{"launch", "Запустить реальную рассылку по явному поручению пользователя. Один idempotencyKey на логический запуск; при повторе запроса сохраняйте его. scheduledAt опционально RFC3339.", launch, false, true},

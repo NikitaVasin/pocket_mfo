@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | `plugins/polymorphicrelation` | Одна связь с записью из нескольких типов коллекций | [AGENTS.md](plugins/polymorphicrelation/AGENTS.md) |
 | `plugins/variants` | Контент по аудиториям и группам экспериментов | [AGENTS.md](plugins/variants/AGENTS.md) |
+| `plugins/typedconfig` | Типизированные экранные блоки, формы, mapping и зависимости | [AGENTS.md](plugins/typedconfig/AGENTS.md) |
 | `plugins/singleton` | Максимум одна запись в коллекции или наборе Variants | [AGENTS.md](plugins/singleton/AGENTS.md) |
 | `plugins/schemalock` | Запрет изменения схемы через HTTP, включая суперпользователей | [AGENTS.md](plugins/schemalock/AGENTS.md) |
 | `plugins/dynamiclink` | URL и параметры открытия как отдельный тип поля | [AGENTS.md](plugins/dynamiclink/AGENTS.md) |
@@ -22,7 +23,7 @@
 
 ## Подключение и изменения
 
-- Вызывайте `Register` до `Bootstrap` / `Start`; Partner Links, MCP и Push принимают также `Options`. Рекомендуемый порядок: Polymorphic Relation, Variants, Singleton, Dynamic Link, Partner Links, MCP, Push, Currency Rates, Schema Lock. Для совместной работы используйте одно приложение `core.App`.
+- Вызывайте `Register` до `Bootstrap` / `Start`; Partner Links, MCP и Push принимают также `Options`. Рекомендуемый порядок: Polymorphic Relation, Variants, Typed Config, Singleton, Dynamic Link, Partner Links, MCP, Push, Currency Rates, Schema Lock. Для совместной работы используйте одно приложение `core.App`.
 - При включённом Schema Lock меняйте прикладную схему миграциями / Go-кодом. Настраивайте Variants через `Load` / `Publish`, Singleton через `Configure`. Не редактируйте служебные таблицы, поля и индексы вручную.
 - Схема, данные и конфигурация должны меняться атомарно. Внутри `RunInTransaction` передавайте `tx`, а не внешнее приложение. Не превращайте внутренний контекст плагинов в публичный способ обхода защиты.
 - Сохраняйте семантику API rules PocketBase: `nil` означает доступ только суперпользователям, указатель на пустую строку — открытый доступ. Не смешивайте эти значения.

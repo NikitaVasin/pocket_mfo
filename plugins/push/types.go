@@ -48,10 +48,13 @@ type ManagedConfig struct {
 	SendRate      *int
 }
 type Plugin struct {
-	app     core.App
-	options Options
-	client  *http.Client
-	worker  sync.Mutex
+	app            core.App
+	options        Options
+	client         *http.Client
+	worker         sync.Mutex
+	analyticsGate  chan struct{}
+	analyticsCache map[string]analyticsCacheEntry
+	overviewCache  map[string]AnalyticsOverview
 }
 type Config struct {
 	Version       int    `json:"version"`

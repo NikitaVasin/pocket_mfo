@@ -1,4 +1,4 @@
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=5" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=8" }));
 app.store.headerLinks = [...app.store.headerLinks, { label: "Пуши", href: "#/push", icon: "ri-notification-3-line" }];
 app.routes.superuserOnly("#/push", () => t.div({ className: "page push-shell" }, pushPage()));
 const pushDeviceCollection = collection => collection?.name === "push_devices";
@@ -21,12 +21,12 @@ function pushPage() {
     const control = (props) => t.div({ className: "field" }, t.input(props));
     app.store.title = "Пуши";
     const blankCampaign = () => ({ version: 0, name: "", allUsers: false, audienceIds: [], excludeAudienceIds: [], lastDeviceOnly: false, cooldownHours: 24, message: { title: "", text: "", action: "app", target: "", image: "" } });
-    const s = store({ tab: "Кампании", modalOpen: false, loaded: false, busy: false, error: "", notice: "", data: null, campaign: blankCampaign(), audience: null, dirty: false, preview: null, schedule: "", testDevices: [], launchKey: "", report: null, links: [], linksLoaded: false, linksLoading: false, linksError: "", coverage: null, coverageLoading: false, coverageError: "" });
+    const s = store({ tab: "Кампании", modalOpen: false, loaded: false, busy: false, error: "", notice: "", data: null, campaign: blankCampaign(), audience: null, dirty: false, preview: null, schedule: "", testDevices: [], launchKey: "", report: null, reportMode: "diagnostics", overview: null, overviewLoading: false, overviewError: "", overviewFrom: new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10), overviewTo: new Date().toISOString().slice(0, 10), overviewMetric: "revenue", hiddenCampaigns: [], analytics: null, analyticsScope: "run", analyticsLoading: false, analyticsError: "", links: [], linksLoaded: false, linksLoading: false, linksError: "", coverage: null, coverageLoading: false, coverageError: "" });
     let nextID = 0;
     let activeModal = null;
     const copy = value => JSON.parse(JSON.stringify(value));
     const api = (action, body = {}) => app.pb.send(`/api/push/admin/${action}`, { method: "POST", body, requestKey: null });
-    async function load() { s.data = await app.pb.send("/api/push/admin/state", { requestKey: null }); s.loaded = true; if (s.report) s.report = await api("report", { runId: s.report.id }); }
+    async function load() { s.data = await app.pb.send("/api/push/admin/state", { requestKey: null }); s.loaded = true; if (s.report) { s.report = await api("report", { runId: s.report.id }); if (s.reportMode === "analytics") void loadAnalytics(); } }
     async function run(fn) { if (s.busy) return; s.busy = true; s.error = ""; s.notice = ""; try { await fn(); } catch (e) { s.error = e?.response?.message || e.message || "Не удалось выполнить запрос"; app.toasts.error(s.error); } finally { s.busy = false; if (s.notice) app.toasts.success(s.notice); } }
     let coverageTimer, coverageRevision = 0;
     const coverageWatcher = watch(() => s.tab === "Аудитории" && s.modalOpen && s.audience ? JSON.stringify(s.audience) : "", value => {
@@ -160,7 +160,7 @@ function pushPage() {
             },
             onafterclose: el => {
                 activeModal = null; s.modalOpen = false;
-                s.error = ""; s.notice = ""; s.report = null; s.audience = null;
+                s.error = ""; s.notice = ""; s.report = null; s.audience = null; analyticsRevision++; s.analytics = null; s.analyticsLoading = false;
                 el.remove();
                 if (opener?.isConnected) opener.focus({ preventScroll: true });
             },
@@ -196,9 +196,23 @@ function pushPage() {
                 await load(); s.notice = "Кампания сохранена. Отправка ещё не запущена.";
             }, true));
     }
-    async function openReport(id) {
+    let analyticsRevision = 0;
+    async function loadAnalytics() {
+        if (!s.report) return;
+        const revision = ++analyticsRevision;
+        s.analytics = null; s.analyticsError = ""; s.analyticsLoading = true;
+        try {
+            const result = await api("analytics", { runId: s.report.id, scope: s.analyticsScope });
+            if (revision === analyticsRevision) s.analytics = result;
+        } catch (error) {
+            if (revision === analyticsRevision) s.analyticsError = error?.response?.message || "Не удалось загрузить аналитику AppMetrica. Повторите запрос.";
+        } finally { if (revision === analyticsRevision) s.analyticsLoading = false; }
+    }
+    async function openReport(id, scope = "run", mode = "diagnostics") {
         s.report = await api("report", { runId: id });
-        openPanel("report", "Результаты запуска", () => report(), button("Обновить результаты", load));
+        s.analyticsScope = scope; s.reportMode = mode;
+        openPanel("report", () => mode === "analytics" ? "Результаты AppMetrica" : "Результаты запуска", () => mode === "analytics" ? t.section(null, t.h2(null, s.report?.name || ""), analytics()) : report(), button("Обновить результаты", load));
+        if (mode === "analytics") void loadAnalytics();
     }
     function campaigns() {
         return t.section({ className: "push-campaigns" },
@@ -210,7 +224,7 @@ function pushPage() {
                     t.div({ className: "push-card-heading" }, t.h3(null, c.name), latest ? statusBadge(latest.status) : statusBadge("draft")),
                     t.strong(null, c.message.title), t.p({ className: "push-card-text" }, c.message.text),
                     t.small({ className: "txt-hint" }, c.allUsers ? "Все пользователи с разрешёнными уведомлениями" : `Аудитории: ${c.audienceIds.map(id => s.data.audiences.find(a => a.id === id)?.name || id).join(", ")}`),
-                    t.div({ className: "push-actions" }, button("Редактировать", () => editCampaign(c)), latest ? button("Результаты", () => openReport(latest.id)) : null));
+                    t.div({ className: "push-actions" }, button("Редактировать", () => editCampaign(c)), latest ? button("Результаты", () => openReport(latest.id)) : null, latest ? button("Результаты AppMetrica", () => openReport(latest.id, "campaign", "analytics")) : null));
             })));
     }
     function campaignEditor() {
@@ -267,12 +281,59 @@ function pushPage() {
     function failureText(item) {
         return item.error || (item.status === "failed" ? "Причина не сохранена. Запросите детали в AppMetrica." : "");
     }
+    function analytics() {
+        const count = value => value.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+        const money = value => value.toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
+        const metric = (label, value, hint) => t.div({ className: "push-metric" }, t.small(null, label), t.strong(null, value), hint ? t.small(null, hint) : null);
+        const sectionNote = section => t.div(null,
+            section.sampled ? t.p({ className: "push-analytics-warning" }, "AppMetrica применила выборку: значения оценочные.") : null,
+            section.dataLagSeconds ? t.small(null, `Задержка данных: ${count(section.dataLagSeconds)} с`) : null);
+        const unavailable = section => t.p({ className: "push-analytics-warning", role: "status" }, section.error || "Данные недоступны.");
+        return t.section({ className: "push-analytics", ariaLabel: "Аналитика AppMetrica" },
+            t.div({ className: "push-card-heading" }, t.h3(null, "AppMetrica"),
+                t.div({ className: "push-actions", role: "group", ariaLabel: "Период результатов" }, ...[["run", "Этот запуск"], ["campaign", "Вся кампания"]].map(([scope, label]) => t.button({ type: "button", className: "btn secondary", ariaPressed: () => s.analyticsScope === scope, onclick: () => { s.analyticsScope = scope; if (s.reportMode === "analytics") void loadAnalytics(); } }, label)))),
+            () => {
+                if (s.analyticsLoading) return t.p({ role: "status", className: "push-analytics-loading" }, "Загружаем метрики из AppMetrica…");
+                if (s.analyticsError) return t.div(null, t.p({ role: "alert" }, s.analyticsError), button("Повторить загрузку аналитики", loadAnalytics));
+                const a = s.analytics;
+                if (!a) return null;
+                const revenue = a.revenue, events = a.events, push = a.push;
+                const ratio = events.status === "ready" && events.values.lead > 0 ? events.values.approved / events.values.lead : null;
+                return t.div(null,
+                    t.p({ className: "txt-hint" }, `${a.scope === "campaign" ? "Все реальные запуски кампании" : a.test ? "Тестовый запуск" : "Выбранный запуск"} · ${a.dateFrom} — ${a.dateTo} · UTC`),
+                    t.div({ className: "push-revenue" }, t.small(null, "Revenue по одобрениям"),
+                        t.strong({ className: "push-revenue-value" }, revenue.status === "ready" ? money(revenue.values.approved) : "—"),
+                        revenue.status === "ready" ? t.div(null,
+                            t.p(null, `В hold: ${money(revenue.values.hold)} · отдельно от одобрений`),
+                            t.small(null, `${count(revenue.values.approvedEvents)} revenue-событий одобрения. Пересчёт валют в RUB — AppMetrica.`),
+                            revenue.values.approvedEvents + revenue.values.holdEvents === 0 ? t.p(null, "Revenue-событий не зарегистрировано. Проверьте передачу revenue у партнёра и дождитесь обработки данных.") : null,
+                            sectionNote(revenue)) : unavailable(revenue)),
+                    t.h3(null, "Доставка и открытия"),
+                    push.status === "ready" ? t.div(null, t.div({ className: "push-metrics" },
+                        ...[["sent", "Отправлено"], ["received", "Доставлено"], ["shown", "Показано · Android"], ["opened", "Открыли пуш"]].map(([key, label]) => metric(label, count(push.values[key]), "устройств"))),
+                        push.values.sent > 0 ? t.p(null, `Открытия / отправки: ${count(100 * push.values.opened / push.values.sent)}%`) : null, sectionNote(push)) : unavailable(push),
+                    t.h3(null, "Этапы конверсии"),
+                    events.status === "ready" ? t.div(null,
+                        t.dl({ className: "push-stages" }, ...[["click", "Перешли к офферу"], ["lead", "Оставили заявку"], ["approved", "Получили одобрение"], ["hold", "Попали в hold"], ["rejected", "Получили отказ"]].flatMap(([key, label]) => [t.dt(null, label), t.dd(null, count(events.values[key]))])),
+                        t.p(null, `Одобрения / заявки: ${ratio === null || ratio > 1 ? "—" : count(ratio * 100) + "%"}`),
+                        ratio > 1 ? t.p(null, "Одобрений больше, чем событий заявки: проверьте передачу этапа lead.") : null,
+                        t.small(null, "Уникальные выданные ссылки, для которых зарегистрирован этап. Один человек может получить несколько ссылок. Этапы не отражают последний статус заявки."), sectionNote(events)) : unavailable(events),
+                    t.details({ className: "push-analytics-method" }, t.summary(null, "Как считаются результаты"),
+                        t.p(null, "Все метрики получены из AppMetrica. События офферов и revenue отобраны по сохранённому ID кампании или запуска. В кампанию не входят тестовые запуски."),
+                        t.p(null, "Источник фиксируется при выдаче ссылки: последнее проверенное открытие пуша за 7 дней. Поздние постбеки относятся к исходной кампании."),
+                        t.p(null, "Этапы считаются независимо. Одобрение без события lead не создаёт заявку в отчёте. Переход к офферу означает редирект на ссылку, а не подтверждённую загрузку страницы партнёра."),
+                        t.p(null, "Revenue — сумма событий AppMetrica, не подтверждение выплаты. Повторные постбеки могут увеличивать сумму; последующий отказ автоматически не вычитает ранее переданный доход. Hold показан отдельно. Расходы кампании здесь не учитываются."),
+                        t.p(null, "Доставка зависит от событий SDK. Для расширенной статистики iOS требуется Notification Service Extension. Отсутствие события не доказывает отсутствие действия.")),
+                    t.small({ className: "push-analytics-updated" }, `Получено: ${new Date(a.fetchedAt).toLocaleString("ru-RU")}. Следующий запрос к AppMetrica — после ${new Date(a.nextRefreshAt).toLocaleTimeString("ru-RU")}.`));
+            });
+    }
     function report() {
         const r = s.report;
         if (!r) return null;
         return t.section({ className: "push-report", ariaLabel: "Результаты запуска" },
             t.div({ className: "push-actions" }, t.h2(null, r.name), statusBadge(r.status)),
-            t.p(null, `Получателей в снимке: ${r.recipients}. Открытия в приложении: ${r.opens}.`),
+            t.h3(null, "Диагностика выбранного запуска"),
+            t.p(null, `Запуск: ${r.created}. Получателей в снимке: ${r.recipients}.`),
             failureText(r) ? t.div({ className: "push-diagnostic", role: "alert" }, t.strong(null, "Причина / последняя ошибка"), t.p(null, failureText(r))) : null,
             r.status === "unknown" ? t.p(null, "Ответ на отправку не подтверждён. Сервер проверяет статус; автоматическая повторная отправка отключена, чтобы не создавать дубликаты.") : null,
             t.p(null, `Группа в AppMetrica: ${r.appmetricaGroupId === "0" ? "ещё не создана" : r.appmetricaGroupId}`),
@@ -291,16 +352,115 @@ function pushPage() {
                     t.dt(null, "Обновлён"), t.dd(null, j.updated || "—"),
                     ...(j.nextAttempt ? [t.dt(null, j.status === "queued" ? "Следующая попытка" : "Следующая проверка статуса"), t.dd(null, j.nextAttempt)] : []),
                     t.dt(null, "Отложенных проверок / попыток"), t.dd(null, String(j.deferrals || 0))))),
-            ...(r.conversions || []).map(c => t.p(null, `${c.status}: ${c.count} · ${c.amount} ${c.currency}`)),
-            t.small(null, "«Отправлена» не означает «Доставлена». Доставка и открытия SDK доступны в отчёте AppMetrica. Суммы сгруппированы по статусу и валюте."));
+            t.small(null, "Статус отправки и пакеты — данные сервера. Статистика доступна по кнопке «Результаты AppMetrica». «Отправлена» не означает «Доставлена»."));
     }
     function history() {
         return t.section(null, t.div({ className: "push-actions" }, t.h2(null, "История запусков"), button("Обновить", load)),
             s.data.runs.length ? t.div(null, ...s.data.runs.map(r => t.article({ className: "push-run" },
                 t.div(null, t.strong(null, r.name), t.div({ className: "push-run-status" }, statusBadge(r.status), t.span(null, `${r.recipients} устройств`)),
                     t.small(null, r.created), failureText(r) ? t.p({ className: "push-job-error" }, failureText(r)) : null),
-                t.div({ className: "push-actions" }, button("Результаты", () => openReport(r.id)),
+                t.div({ className: "push-actions" }, button("Результаты", () => openReport(r.id)), button("Результаты AppMetrica", () => openReport(r.id, "run", "analytics")),
                     r.status === "scheduled" ? button("Отменить", async () => { await api("cancel", { runId: r.id }); await load(); }) : null)))) : t.p(null, "Рассылок пока нет."));
+    }
+    let overviewRevision = 0;
+    const overviewMetrics = { revenue: ["Revenue по одобрениям, ₽", "revenue"], holdRevenue: ["Revenue в hold, ₽", "revenue"], opened: ["Открытия пуша", "push"], lead: ["Заявки", "eventDays"], approved: ["Одобрения", "eventDays"] };
+    const graphColors = ["#3478db", "#c86d10", "#20866f", "#a653be", "#d34d65", "#448691", "#807722", "#997054", "#6078b5", "#bd6089"];
+    const utcToday = () => new Date().toISOString().slice(0, 10);
+    const dayOffset = (date, days) => new Date(Date.parse(date + "T00:00:00Z") + days * 86400000).toISOString().slice(0, 10);
+    async function loadOverview() {
+        const revision = ++overviewRevision;
+        s.overviewLoading = true; s.overviewError = ""; s.overview = null;
+        try {
+            const result = await api("analytics_overview", { dateFrom: s.overviewFrom, dateTo: s.overviewTo });
+            if (revision === overviewRevision) { s.overview = result; s.hiddenCampaigns = s.hiddenCampaigns.filter(id => result.campaigns.some(c => c.id === id)); }
+        } catch (error) {
+            if (revision === overviewRevision) s.overviewError = error?.response?.message || "Не удалось получить обзор AppMetrica.";
+        } finally { if (revision === overviewRevision) s.overviewLoading = false; }
+    }
+    function shiftOverview(days) {
+        const from = s.overview?.dateFrom || s.overviewFrom, to = s.overview?.dateTo || s.overviewTo;
+        const nextTo = dayOffset(to, days);
+        if (nextTo > utcToday()) days = Math.round((Date.parse(utcToday()) - Date.parse(to)) / 86400000);
+        if (!days) return;
+        s.overviewFrom = dayOffset(from, days); s.overviewTo = dayOffset(to, days);
+        void loadOverview();
+    }
+    function overview() {
+        return t.section({ className: "push-overview", ariaLabel: "Обзор эффективности кампаний" },
+            t.h2(null, "Эффективность кампаний"),
+            t.p({ className: "txt-hint" }, "Последние 10 кампаний с реальными отправками на конец периода. Все показатели — из AppMetrica, по датам событий в UTC."),
+            t.form({ className: "push-overview-period", onsubmit: e => { e.preventDefault(); void loadOverview(); } },
+                t.label({ className: "push-field" }, "С даты", control({ type: "date", required: true, max: utcToday(), value: () => s.overviewFrom, onchange: e => { s.overviewFrom = e.target.value; } })),
+                t.label({ className: "push-field" }, "По дату", control({ type: "date", required: true, max: utcToday(), value: () => s.overviewTo, onchange: e => { s.overviewTo = e.target.value; } })),
+                t.button({ type: "submit", className: "btn", disabled: () => s.overviewLoading }, "Показать"),
+                ...[7, 30, 90].map(days => t.button({ type: "button", className: "btn secondary", onclick: () => { s.overviewTo = utcToday(); s.overviewFrom = dayOffset(s.overviewTo, 1 - days); void loadOverview(); } }, `${days} дней`))),
+            () => {
+                if (s.overviewLoading) return t.p({ role: "status", className: "push-analytics-loading" }, "Загружаем сравнение кампаний…");
+                if (s.overviewError) return t.div({ role: "alert" }, t.p(null, s.overviewError), button("Повторить загрузку обзора", loadOverview));
+                const data = s.overview;
+                if (!data) return null;
+                const span = 1 + Math.round((Date.parse(data.dateTo) - Date.parse(data.dateFrom)) / 86400000);
+                const metric = s.overviewMetric, section = data.sections[overviewMetrics[metric][1]];
+                const fmt = value => value == null ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+                const rate = c => c.totals.sent > 0 && c.totals.opened != null ? fmt(100 * c.totals.opened / c.totals.sent) + "%" : "—";
+                return t.div(null,
+                    t.div({ className: "push-overview-toolbar" },
+                        t.div({ className: "push-actions" }, button("← Раньше", () => shiftOverview(-span)), t.strong(null, `${data.dateFrom} — ${data.dateTo}`), button("Позже →", () => shiftOverview(span), false, () => data.dateTo >= utcToday())),
+                        t.label({ className: "push-field" }, "Показатель графика", t.div({ className: "field" }, t.select({ ariaLabel: "Показатель графика", value: () => s.overviewMetric, onchange: e => { s.overviewMetric = e.target.value; } }, ...Object.entries(overviewMetrics).map(([key, [label]]) => t.option({ value: key, selected: key === metric }, label)))))),
+                    !data.campaigns.length ? t.p({ className: "push-empty" }, "На конец этого периода нет кампаний с реальными отправками. Выберите другие даты.") : t.div(null,
+                        section?.status === "ready" ? overviewGraph(data, metric) : t.p({ className: "push-analytics-warning", role: "status" }, section?.error || "График недоступен."),
+                        t.div({ className: "push-chart-legend", role: "group", ariaLabel: "Кампании на графике" }, ...data.campaigns.map((c, index) => t.button({ type: "button", className: "btn secondary", ariaPressed: !s.hiddenCampaigns.includes(c.id), onclick: () => { s.hiddenCampaigns = s.hiddenCampaigns.includes(c.id) ? s.hiddenCampaigns.filter(id => id !== c.id) : [...s.hiddenCampaigns, c.id]; } }, t.span({ className: "push-chart-key", style: `--campaign-color:${graphColors[index]}` }, String(index + 1)), c.name))),
+                        t.small(null, "Перетащите график по горизонтали или используйте стрелки для сдвига дат. Нажмите на кампанию в легенде, чтобы скрыть или показать линию."),
+                        t.h3(null, "Сравнение за период"),
+                        t.div({ className: "push-table-scroll", role: "region", ariaLabel: "Сравнение кампаний", tabIndex: 0 },
+                            t.table({ className: "push-overview-table" }, t.thead(null, t.tr(null, ...["Кампания", "Отправки", "Открытия", "Открытия / отправки", "Заявки", "Одобрения", "Revenue, ₽", "Hold, ₽", ""].map(label => t.th({ scope: "col" }, label)))),
+                                t.tbody(null, ...data.campaigns.map((c, index) => t.tr(null, t.th({ scope: "row" }, `${index + 1}. ${c.name}`), ...[c.totals.sent, c.totals.opened].map(v => t.td(null, fmt(v))), t.td(null, rate(c)), ...[c.totals.lead, c.totals.approved, c.totals.revenue, c.totals.holdRevenue].map(v => t.td(null, fmt(v))), t.td(null, button("Результаты AppMetrica", () => openReport(c.runId, "campaign", "analytics")))))))),
+                        ...Object.entries(data.sections).filter(([, v]) => v.status !== "ready").map(([key, v]) => t.p({ className: "push-analytics-warning", role: "status" }, `${{ push: "Доставка", events: "Этапы за период", eventDays: "Этапы по дням", revenue: "Revenue" }[key]}: ${v.error}`)),
+                        Object.values(data.sections).some(v => v.sampled) ? t.p({ className: "push-analytics-warning" }, "AppMetrica применила выборку: часть значений оценочная.") : null,
+                        t.p({ className: "txt-hint" }, "Отправки и открытия — события, включая повторные запуски. Заявки и одобрения — уникальные ссылки за период; их дневные значения нельзя складывать для подсчёта уникальных заявок за весь период. Revenue по одобрениям и hold разделены; повторные постбеки могут увеличивать сумму."),
+                        t.details(null, t.summary(null, "Данные графика по дням"), t.div({ className: "push-table-scroll" }, t.table({ className: "push-overview-table" },
+                            t.thead(null, t.tr(null, t.th({ scope: "col" }, "Дата"), ...data.campaigns.map(c => t.th({ scope: "col" }, c.name)))),
+                            t.tbody(null, ...data.campaigns[0].days.map((day, i) => t.tr(null, t.th({ scope: "row" }, day.date), ...data.campaigns.map(c => t.td(null, fmt(c.days[i].values[metric])))))))))),
+                    t.small({ className: "push-analytics-updated" }, `Получено: ${new Date(data.fetchedAt).toLocaleString("ru-RU")}. Следующее обновление — после ${new Date(data.nextRefreshAt).toLocaleTimeString("ru-RU")}. Задержка AppMetrica: до ${Math.max(0, ...Object.values(data.sections).map(v => v.dataLagSeconds || 0))} с.`));
+            });
+    }
+    function overviewGraph(data, metric) {
+        const visible = data.campaigns.map((c, index) => ({ c, index })).filter(({ c }) => !s.hiddenCampaigns.includes(c.id));
+        if (!visible.length) return t.p({ className: "push-empty" }, "Выберите хотя бы одну кампанию в легенде.");
+        const svgNode = (name, attrs, text) => {
+            const el = document.createElementNS("http://www.w3.org/2000/svg", name);
+            for (const [key, value] of Object.entries(attrs || {})) el.setAttribute(key, value);
+            if (text != null) el.textContent = text;
+            return el;
+        };
+        const width = 960, height = 320, left = 65, right = 20, top = 24, bottom = 40;
+        const length = data.campaigns[0].days.length;
+        const values = visible.flatMap(({ c }) => c.days.map(d => d.values[metric]));
+        const min = Math.min(0, ...values), maximum = Math.max(1, ...values);
+        const max = ["revenue", "holdRevenue"].includes(metric) ? maximum : Math.max(4, Math.ceil(maximum / 4) * 4);
+        const x = i => left + (width - left - right) * (length === 1 ? 0.5 : i / (length - 1));
+        const y = value => top + (height - top - bottom) * (1 - (value - min) / (max - min));
+        const svg = svgNode("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": `${overviewMetrics[metric][0]} по дням. Период ${data.dateFrom} — ${data.dateTo}`, tabindex: "0", class: "push-trend" });
+        svg.append(svgNode("title", {}, `${overviewMetrics[metric][0]} · перетаскивание и стрелки меняют период`));
+        for (let n = 0; n <= 4; n++) {
+            const v = min + (max - min) * n / 4;
+            svg.append(svgNode("line", { x1: left, y1: y(v), x2: width - right, y2: y(v), class: "push-chart-grid" }), svgNode("text", { x: left - 8, y: y(v) + 4, "text-anchor": "end", class: "push-chart-label" }, v.toLocaleString("ru-RU", { maximumFractionDigits: 1 })));
+        }
+        for (const i of [...new Set([0, Math.floor((length - 1) / 2), length - 1])]) svg.append(svgNode("text", { x: x(i), y: height - 12, "text-anchor": i === 0 ? "start" : i === length - 1 ? "end" : "middle", class: "push-chart-label" }, data.campaigns[0].days[i].date));
+        for (const { c, index } of visible) {
+            const path = c.days.map((day, i) => `${i ? "L" : "M"}${x(i)},${y(day.values[metric])}`).join(" ");
+            svg.append(svgNode("path", { d: path, fill: "none", stroke: graphColors[index], "stroke-width": 2.5, "stroke-dasharray": index >= 5 ? "7 4" : "none", "vector-effect": "non-scaling-stroke" }));
+            c.days.forEach((day, i) => {
+                const point = svgNode("circle", { cx: x(i), cy: y(day.values[metric]), r: 4, fill: graphColors[index] });
+                point.append(svgNode("title", {}, `${index + 1}. ${c.name} · ${day.date}: ${day.values[metric].toLocaleString("ru-RU", { maximumFractionDigits: 2 })}`)); svg.append(point);
+            });
+        }
+        let start;
+        svg.addEventListener("pointerdown", event => { if (event.button !== 0) return; start = event.clientX; svg.setPointerCapture(event.pointerId); });
+        svg.addEventListener("pointerup", event => { if (start == null) return; const delta = event.clientX - start; start = null; if (Math.abs(delta) > 20) shiftOverview(-Math.round(delta / svg.getBoundingClientRect().width * length)); });
+        svg.addEventListener("pointercancel", () => { start = null; });
+        svg.addEventListener("keydown", event => { if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); shiftOverview(event.key === "ArrowLeft" ? -1 : 1); } });
+        return t.div({ className: "push-chart-frame" }, svg);
     }
     function settings() {
         const locks = s.data.configLocks || { all: false, fields: [] };
@@ -325,10 +485,10 @@ function pushPage() {
             }, true));
     }
     run(load);
-    const root = t.div({ className: "push-page", onunmount: () => { if (activeModal) app.modals.close(activeModal, true); clearTimeout(coverageTimer); coverageRevision++; coverageWatcher.unwatch(); } }, t.div({ inert: () => s.modalOpen }, t.header(null, t.h1(null, "Пуши"), t.p(null, "Подготовьте сообщение, выберите аудиторию и запустите рассылку.")),
-        t.nav({ className: "push-tabs", ariaLabel: "Разделы пушей" }, ...["Кампании", "Аудитории", "История", "Настройки"].map(tab => t.button({ type: "button", className: () => `btn ${s.tab === tab ? "" : "secondary"}`, ariaPressed: () => String(s.tab === tab), disabled: () => s.busy, onclick: () => { s.tab = tab; s.error = ""; s.notice = ""; s.preview = null; } }, tab))),
+    const root = t.div({ className: "push-page", onunmount: () => { if (activeModal) app.modals.close(activeModal, true); clearTimeout(coverageTimer); coverageRevision++; overviewRevision++; analyticsRevision++; coverageWatcher.unwatch(); } }, t.div({ inert: () => s.modalOpen }, t.header(null, t.h1(null, "Пуши"), t.p(null, "Подготовьте сообщение, выберите аудиторию и запустите рассылку.")),
+        t.nav({ className: "push-tabs", ariaLabel: "Разделы пушей" }, ...["Кампании", "Аудитории", "История", "Обзор", "Настройки"].map(tab => t.button({ type: "button", className: () => `btn ${s.tab === tab ? "" : "secondary"}`, ariaPressed: () => String(s.tab === tab), disabled: () => s.busy, onclick: () => { s.tab = tab; s.error = ""; s.notice = ""; s.preview = null; if (tab === "Обзор" && !s.overview && !s.overviewLoading) void loadOverview(); } }, tab))),
         () => !s.modalOpen && s.error ? t.div({ role: "alert", className: "alert alert-danger" }, s.error) : null,
         () => !s.modalOpen && s.notice ? t.div({ role: "status", className: "push-notice" }, s.notice) : null,
-        () => !s.loaded ? t.div(null, t.p(null, s.error ? "Не удалось загрузить данные." : "Загрузка…"), s.error ? button("Повторить загрузку", load) : null) : s.tab === "Кампании" ? campaigns() : s.tab === "Аудитории" ? audiences() : s.tab === "История" ? history() : settings()));
+        () => !s.loaded ? t.div(null, t.p(null, s.error ? "Не удалось загрузить данные." : "Загрузка…"), s.error ? button("Повторить загрузку", load) : null) : s.tab === "Кампании" ? campaigns() : s.tab === "Аудитории" ? audiences() : s.tab === "История" ? history() : s.tab === "Обзор" ? overview() : settings()));
     return root;
 }

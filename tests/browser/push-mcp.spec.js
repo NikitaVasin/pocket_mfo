@@ -516,3 +516,202 @@ test('audience cards open a side editor, preserve saved conditions and discard u
     await expect(dialog).toHaveCount(0);
     expect(errors).toEqual([]);
 });
+
+test('AppMetrica results separate revenue, scope, unavailable metrics and stale responses', async ({ page }, testInfo) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const run = { id: 'analyticsrun001', campaignId: 'analyticscmp001', name: 'Аналитика кампании', status: 'sent', recipients: 100, created: '2026-09-23 09:00:00.000Z' };
+    await page.route('**/api/push/admin/state', async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { ...await response.json(), runs: [run] } });
+    });
+    await page.route('**/api/push/admin/report', route => route.fulfill({ json: { ...run, opens: 999, conversions: [{ status: 'approved', amount: 999999, count: 999, currency: 'USD' }], jobs: [], jobCounts: {}, appmetricaGroupId: '701' } }));
+    let fail = false;
+    let analyticsCalls = 0;
+    let releaseRun;
+    const firstRun = new Promise(resolve => { releaseRun = resolve; });
+    await page.route('**/api/push/admin/analytics', async route => {
+        analyticsCalls++;
+        const { scope } = route.request().postDataJSON();
+        if (scope === 'run') await firstRun;
+        await route.fulfill({ json: {
+            source: 'AppMetrica', scope, test: false, dateFrom: '2026-09-22', dateTo: '2026-09-23', currency: 'RUB', timezone: 'UTC', fetchedAt: '2026-09-23T09:00:00Z', nextRefreshAt: '2026-09-23T09:05:00Z',
+            push: { status: 'ready', values: { sent: 100, received: 90, shown: 80, opened: 50 }, sampled: false, dataLagSeconds: 30 },
+            events: { status: 'ready', values: { click: 40, lead: 20, approved: 5, hold: 2, rejected: 3 }, sampled: true, dataLagSeconds: 0 },
+            revenue: fail ? { status: 'unavailable', error: 'AppMetrica HTTP 403: проверьте права OAuth-токена' } : { status: 'ready', values: { approved: scope === 'campaign' ? 1250.5 : 1, hold: 250, approvedEvents: 5, holdEvents: 2 }, sampled: false, dataLagSeconds: 0 },
+        } });
+    });
+    await openPlugin(page, '#/push');
+    const push = page.locator('.push-page');
+    await push.getByRole('button', { name: 'История', exact: true }).click();
+    await push.getByRole('button', { name: 'Результаты', exact: true }).click();
+    await expect(push.getByRole('dialog', { name: 'Результаты запуска', exact: true })).toBeVisible();
+    await expect(push.locator('.push-analytics')).toHaveCount(0);
+    expect(analyticsCalls).toBe(0);
+    await push.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(push.getByRole('dialog')).toHaveCount(0);
+    await push.getByRole('button', { name: 'Результаты AppMetrica', exact: true }).click();
+    const dialog = push.getByRole('dialog');
+    const analytics = dialog.getByRole('region', { name: 'Аналитика AppMetrica' });
+    await expect(analytics).toContainText('Загружаем метрики');
+    await analytics.getByRole('button', { name: 'Вся кампания', exact: true }).click();
+    await expect(analytics.locator('.push-revenue-value')).toHaveText(/1\s250,50\s₽/);
+    releaseRun();
+    await expect(analytics.getByRole('button', { name: 'Вся кампания', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(analytics).toContainText('Одобрения / заявки: 25%');
+    await expect(analytics).toContainText('значения оценочные');
+    await expect(dialog).not.toContainText('999999');
+    await expect(dialog).not.toContainText('Открытия в приложении: 999');
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        for (const theme of ['light', 'dark']) {
+            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+            await dialog.locator('.modal-content').evaluate(el => { el.scrollTop = 0; });
+            expect(await dialog.locator('.modal-content').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await page.screenshot({ path: `test-results/push-analytics-${testInfo.project.name}-${theme}-${width}.png` });
+        }
+    }
+    fail = true;
+    await dialog.getByRole('button', { name: 'Обновить результаты', exact: true }).click();
+    await expect(analytics.locator('.push-revenue-value')).toHaveText('—');
+    await expect(analytics).toContainText('HTTP 403');
+    await expect(analytics.locator('.push-metrics')).toContainText('50');
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(errors).toEqual([]);
+});
+
+test('campaign overview compares ten campaigns and moves dates without mixing metrics', async ({ page }, testInfo) => {
+    const errors = [], requests = [];
+    page.on('pageerror', error => errors.push(error.message));
+    let brokenRevenue = false;
+    await page.route('**/api/push/admin/analytics_overview', async route => {
+        const range = route.request().postDataJSON(); requests.push(range);
+        const days = [];
+        for (let time = Date.parse(range.dateFrom); time <= Date.parse(range.dateTo); time += 86400000) days.push(new Date(time).toISOString().slice(0, 10));
+        const ready = { status: 'ready', sampled: false, dataLagSeconds: 4 };
+        await route.fulfill({ json: {
+            ...range, source: 'AppMetrica', currency: 'RUB', timezone: 'UTC', fetchedAt: new Date().toISOString(), nextRefreshAt: new Date(Date.now() + 300000).toISOString(),
+            sections: { push: ready, events: ready, eventDays: ready, revenue: brokenRevenue ? { status: 'unavailable', error: 'AppMetrica HTTP 429: исчерпана квота' } : ready },
+            campaigns: Array.from({ length: 10 }, (_, i) => ({ id: `cmp${i}`, name: `Кампания ${i + 1}`, runId: `run${i}`, totals: { sent: 100, opened: 25, lead: 5, approved: 2, ...(!brokenRevenue ? { revenue: 1000 + i * 100, holdRevenue: 200 } : {}) },
+                days: days.map((date, n) => ({ date, values: { opened: (n + i) % 8, lead: n % 3, approved: n % 2, ...(!brokenRevenue ? { revenue: ((n + i) % 5) * 100, holdRevenue: (n % 3) * 10 } : {}) } })),
+            })),
+        } });
+    });
+    await openPlugin(page, '#/push');
+    const push = page.locator('.push-page');
+    await push.getByRole('button', { name: 'Обзор', exact: true }).click();
+    const overview = push.getByRole('region', { name: 'Обзор эффективности кампаний' });
+    await expect(overview.locator('.push-trend')).toBeVisible();
+    const table = overview.getByRole('region', { name: 'Сравнение кампаний', exact: true });
+    await expect(table.locator('tbody tr')).toHaveCount(10);
+    await expect(table.locator('tbody tr').first()).toContainText('25%');
+    await expect(overview.locator('.push-trend path')).toHaveCount(10);
+    const legend = overview.getByRole('group', { name: 'Кампании на графике' });
+    await legend.getByRole('button').first().click();
+    await expect(overview.locator('.push-trend path')).toHaveCount(9);
+    await legend.getByRole('button').first().click();
+    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('lead');
+    await expect(overview.locator('.push-trend')).toHaveAttribute('aria-label', /^Заявки по дням/);
+    await expect(overview.getByLabel('Показатель графика', { exact: true })).toHaveValue('lead');
+    expect(requests).toHaveLength(1); // Metric and legend changes reuse the same report.
+    const initial = requests[0];
+    await overview.getByRole('button', { name: '← Раньше', exact: true }).click();
+    await expect(overview.locator('.push-trend')).toBeVisible();
+    expect(requests[1].dateTo < initial.dateFrom).toBe(true);
+    await overview.locator('.push-trend').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(overview.locator('.push-trend')).toBeVisible();
+    expect(Date.parse(requests[2].dateTo) - Date.parse(requests[1].dateTo)).toBe(86400000);
+    const box = await overview.locator('.push-trend').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down(); await page.mouse.move(box.x + box.width * .7, box.y + box.height / 2, { steps: 4 }); await page.mouse.up();
+    await expect(overview.locator('.push-trend')).toBeVisible();
+    expect(requests[3].dateTo < requests[2].dateTo).toBe(true);
+    await overview.getByLabel('С даты', { exact: true }).fill('2025-01-01');
+    await overview.getByLabel('По дату', { exact: true }).fill('2025-01-07');
+    await overview.getByRole('button', { name: 'Показать', exact: true }).click();
+    await expect(overview.locator('.push-trend')).toHaveAttribute('aria-label', /2025-01-01 — 2025-01-07/);
+    await expect(overview.getByLabel('Показатель графика', { exact: true })).toHaveValue('lead');
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        for (const theme of ['light', 'dark']) {
+            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+            await page.evaluate(() => document.querySelector('.push-shell').scrollTop = 0);
+            expect(await push.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await page.screenshot({ path: testInfo.outputPath(`push-overview-${theme}-${width}.png`), fullPage: true });
+        }
+    }
+    brokenRevenue = true;
+    await overview.getByRole('button', { name: 'Показать', exact: true }).click();
+    await expect(overview).toContainText('HTTP 429');
+    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('revenue');
+    await expect(overview.locator('.push-trend')).toHaveCount(0);
+    await expect(table.locator('tbody tr').first().locator('td').nth(5)).toHaveText('—');
+    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('opened');
+    await expect(overview.locator('.push-trend')).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
+    test(`native select popups follow the admin theme with ${plugin} stylesheet alone`, async ({ page }, testInfo) => {
+        const errors = [];
+        page.on('pageerror', error => errors.push(error.message));
+        let select;
+        if (plugin === 'push') {
+            await page.route('**/api/push/admin/analytics_overview', route => route.fulfill({ json: {
+                ...route.request().postDataJSON(), campaigns: [], sections: {},
+                fetchedAt: new Date().toISOString(), nextRefreshAt: new Date().toISOString(),
+            } }));
+            await openPlugin(page, '#/push');
+            await page.getByRole('button', { name: 'Обзор', exact: true }).click();
+            select = page.getByLabel('Показатель графика', { exact: true });
+        } else if (plugin === 'partnerlinks') {
+            await openPlugin(page, '#/partner-links');
+            await page.getByRole('button', { name: 'Добавить провайдера', exact: true }).click();
+            select = page.locator('.pl-provider').last().getByLabel('Где передавать секрет', { exact: true });
+        } else {
+            await openPlugin(page, '#/collections');
+            await page.evaluate(() => app.modals.openRecordUpsert(app.store.collections.find(c => c.name === 'partner_links')));
+            select = page.getByLabel('Режим открытия', { exact: true });
+        }
+        await expect(select).toBeVisible();
+        // Each plugin is independently installable; another plugin must not mask a missing fix.
+        await page.evaluate(plugin => {
+            for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+                if (/\/extensions\/(push|partnerlinks|dynamicLink)\//.test(link.href)) {
+                    link.disabled = !link.href.includes(`/extensions/${plugin}/`);
+                }
+            }
+        }, plugin);
+        for (const [preference, system, expected] of [
+            ['dark', 'light', 'dark'], ['light', 'dark', 'light'], ['', 'dark', 'dark'], ['', 'light', 'light'],
+        ]) {
+            await page.emulateMedia({ colorScheme: system });
+            await page.evaluate(preference => app.store.userColorScheme = preference, preference);
+            await expect(page.locator('html')).toHaveAttribute('data-color-scheme', expected);
+            await expect(select).toHaveCSS('color-scheme', expected);
+            const colors = await select.locator('option:not(:disabled)').evaluateAll(options => options.map(option => {
+                const style = getComputedStyle(option);
+                const rgb = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+                const luminance = value => rgb(value).map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+                const foreground = luminance(style.color), background = luminance(style.backgroundColor);
+                return { background: style.backgroundColor, contrast: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) };
+            }));
+            expect(colors.length).toBeGreaterThan(1);
+            for (const color of colors) {
+                expect(color.background).not.toBe('rgba(0, 0, 0, 0)');
+                expect(color.contrast).toBeGreaterThanOrEqual(4.5);
+            }
+            if (preference) {
+                await select.click();
+                await page.screenshot({ path: testInfo.outputPath(`select-${plugin}-${expected}.png`) });
+                await page.keyboard.press('Escape');
+            }
+        }
+        const nextValue = await select.evaluate(el => [...el.options].find(option => !option.disabled && option.value !== el.value).value);
+        await select.selectOption(nextValue);
+        await expect(select).toHaveValue(nextValue);
+        expect(errors).toEqual([]);
+    });
+}

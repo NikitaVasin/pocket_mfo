@@ -1,5 +1,5 @@
 // PocketBase v0.40.4 UI extension; authorization is enforced on the server.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=5" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=6" }));
 const settingsPath = "#/partner-links";
 app.store.headerLinks = [...app.store.headerLinks, { label: "Партнёрские ссылки", href: settingsPath, icon: "ri-links-line" }];
 app.routes.superuserOnly(settingsPath, () => t.div({ className: "page" }, partnerSettingsContent()));

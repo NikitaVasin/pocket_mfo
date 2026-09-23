@@ -143,6 +143,7 @@ MCP-клиент → /api/mcp + ограниченный ключ → content_* 
 | Push | Устройства, аудитории, кампании и очередь; Partner Links/Variants нужны для соответствующих условий и атрибуции; MCP опционален | [README](../plugins/push/README.md), [AGENTS](../plugins/push/AGENTS.md) |
 | MCP | Независимый сервер инструментов и ключей; плагины подключаются через Provider | [README](../plugins/mcp/README.md), [AGENTS](../plugins/mcp/AGENTS.md) |
 | Schema Lock | Политика HTTP-доступа к схеме; регистрировать последним | [README](../plugins/schemalock/README.md), [AGENTS](../plugins/schemalock/AGENTS.md) |
+| Currency Rates | Независимый импорт курсов ЦБ РФ в `currency_rates`; чтение открыто, запись только импортёром, хранение пять лет | [README](../plugins/currencyrates/README.md), [AGENTS](../plugins/currencyrates/AGENTS.md) |
 
 Все плагины работают с одним `core.App`; админка встроена через `embed.FS` и UI API PocketBase. Отдельная frontend-сборка и форк PocketBase не нужны. Служебные коллекции создают плагины, прикладную схему — ваши миграции. Для переноса состояния нужен полный бэкап, экспорт схемы не переносит конфигурации и историю.
 

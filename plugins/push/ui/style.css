@@ -1,3 +1,16 @@
+/* Native popups do not consistently inherit the select background from PocketBase.
+   Keep this compatibility block in Push, Partner Links and Dynamic Link: each plugin
+   can be installed independently, and native selects in admin forms need it too. */
+[data-color-scheme="light"] select { color-scheme: light; }
+[data-color-scheme="dark"] select { color-scheme: dark; }
+select option, select optgroup {
+    color: var(--surfaceTxtColor);
+    background-color: var(--surfaceColor);
+}
+select option:disabled, select optgroup:disabled, select optgroup:disabled option {
+    color: var(--surfaceTxtDisabledColor);
+}
+
 .push-page{width:100%;max-width:1300px;margin:0 auto;padding:24px;overflow-wrap:anywhere}
 .push-page header{margin-bottom:24px}
 .push-page p{margin:8px 0 16px}
@@ -106,3 +119,41 @@
 .push-modal-content { padding-bottom: calc(var(--spacing) + env(safe-area-inset-bottom, 0px)); }
 .push-devices-active .page-header-primary-btns .new-record-btn { display: none !important; }
 @media (max-width: 700px) { .push-campaign-card, .push-audience-card { padding: 16px; } .push-modal .modal-footer { flex-wrap: wrap; } }
+
+.push-analytics { margin: 24px 0; padding-bottom: 24px; border-bottom: 1px solid var(--surfaceAlt2Color); }
+.push-analytics .push-card-heading h3, .push-analytics .push-card-heading .push-actions { margin: 0; }
+.push-analytics [aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--infoColor); }
+.push-analytics-loading { min-height: 160px; align-content: center; }
+.push-revenue { padding: 20px; border: 1px solid var(--surfaceAlt2Color); border-radius: var(--borderRadius); background: var(--surfaceAlt1Color); }
+.push-revenue-value { display: block; margin: 8px 0; font-size: clamp(26px, 4vw, 38px); font-variant-numeric: tabular-nums; line-height: 1.25; }
+.push-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.push-metric { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--surfaceAlt2Color); border-radius: var(--borderRadius); }
+.push-metric strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.push-stages { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 12px 0; }
+.push-stages dt, .push-stages dd { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--surfaceAlt2Color); }
+.push-stages dd { padding-left: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.push-analytics-warning { padding-left: 12px; border-left: 3px solid var(--warningColor); }
+.push-analytics-method { margin: 20px 0; }
+.push-analytics-method summary { min-height: 44px; align-content: center; cursor: pointer; }
+.push-analytics-updated { display: block; color: var(--surfaceTxtHintColor); }
+@media (max-width: 700px) { .push-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.push-overview-period { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+.push-overview-period .push-field { margin: 0; }
+.push-overview-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+.push-overview-toolbar .push-field { min-width: 230px; }
+.push-chart-frame { border: 1px solid var(--surfaceAlt2Color); border-radius: var(--borderRadius); background: var(--surfaceColor); padding: 12px; }
+.push-trend { display: block; width: 100%; min-height: 210px; touch-action: pan-y; cursor: grab; }
+.push-trend:active { cursor: grabbing; }
+.push-trend:focus-visible { outline: 2px solid var(--infoColor); }
+.push-chart-grid { stroke: var(--surfaceAlt2Color); stroke-width: 1; }
+.push-chart-label { fill: var(--surfaceTxtColor); font-size: 13px; }
+.push-chart-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.push-chart-legend .btn { white-space: normal; height: auto; min-height: 44px; text-align: left; }
+.push-chart-legend [aria-pressed="false"] { text-decoration: line-through; opacity: .6; }
+.push-chart-key { background: var(--campaign-color); color: white; display: inline-flex; min-width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 4px; margin-right: 8px; }
+.push-table-scroll { max-width: 100%; overflow-x: auto; margin: 16px 0; }
+.push-overview-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.push-overview-table th, .push-overview-table td { padding: 12px; border-bottom: 1px solid var(--surfaceAlt2Color); text-align: right; white-space: nowrap; }
+.push-overview-table th:first-child { text-align: left; min-width: 180px; max-width: 280px; white-space: normal; }
+@media (max-width: 700px) { .push-overview-period .push-field { flex: 1 1 140px; } .push-chart-frame { padding: 4px; } .push-trend { min-width: 560px; } .push-chart-frame { overflow-x: auto; } }

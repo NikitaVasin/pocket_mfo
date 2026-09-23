@@ -14,6 +14,7 @@
 | [Push](plugins/push) | Устройства, аудитории, черновики кампаний, ручной/отложенный запуск через AppMetrica и атрибуция конверсий |
 | [MCP](plugins/mcp) | Отдельная вкладка ключей, права на инструменты и коллекции, наполнение контента и подключение других плагинов через `Provider` |
 | [Schema Lock](plugins/schemalock) | Схема только из кода; записи, Variants и настройки сервера доступны, системные записи только для чтения, кроме `_superusers` |
+| [Currency Rates](plugins/currencyrates) | Курсы ЦБ РФ в `currency_rates`, ежедневное обновление, история за последние пять лет |
 
 Поддерживаемая версия: **PocketBase v0.40.4**, Go **1.27**. UI API этой версии экспериментальный: обновление PocketBase требует повторного запуска интеграционных и браузерных тестов. Форк PocketBase не нужен.
 
@@ -105,6 +106,7 @@ UI встроен в Go-бинарник через `embed.FS`; отдельна
 | [Push](plugins/push/README.md) | [AGENTS.md](plugins/push/AGENTS.md) |
 | [MCP](plugins/mcp/README.md) | [AGENTS.md](plugins/mcp/AGENTS.md) |
 | [Schema Lock](plugins/schemalock/README.md) | [AGENTS.md](plugins/schemalock/AGENTS.md) |
+| [Currency Rates](plugins/currencyrates/README.md) | [AGENTS.md](plugins/currencyrates/AGENTS.md) |
 
 В example коллекция **demo_homepage** показывает Singleton: форму вместо таблицы и шесть наборов контента. Включение Singleton задаётся в миграции; в приложении без Schema Lock также доступен переключатель **Collection settings → Singleton**.
 

@@ -1,5 +1,5 @@
 // PocketBase owns the record form and schema editor; this field supplies its controls.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/dynamicLink/editor.css?v=1" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/dynamicLink/editor.css?v=2" }));
 const defaults = () => ({ url: "", mode: "appView", saveCooke: true, showLoader: true, changeClient: false, openUrlsInBrowser: false, skipWarningDialog: false });
 app.fieldTypes.dynamicLink = {
     icon: "ri-links-line", label: "Dynamic link",

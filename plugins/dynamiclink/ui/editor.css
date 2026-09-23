@@ -1,3 +1,16 @@
+/* Native popups do not consistently inherit the select background from PocketBase.
+   Keep this compatibility block in Push, Partner Links and Dynamic Link: each plugin
+   can be installed independently, and native selects in admin forms need it too. */
+[data-color-scheme="light"] select { color-scheme: light; }
+[data-color-scheme="dark"] select { color-scheme: dark; }
+select option, select optgroup {
+    color: var(--surfaceTxtColor);
+    background-color: var(--surfaceColor);
+}
+select option:disabled, select optgroup:disabled, select optgroup:disabled option {
+    color: var(--surfaceTxtDisabledColor);
+}
+
 .dl-input { min-width: 0; }
 .dl-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .dl-controls { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

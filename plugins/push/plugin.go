@@ -26,7 +26,7 @@ func register(app core.App, options Options, client *http.Client) *Plugin {
 	options.AuthCollections = slices.Clone(options.AuthCollections)
 	setManaged(app, options.Managed)
 	app.Store().Set(adminLockStoreKey, options.LockAdminConfig)
-	p := &Plugin{app: app, options: options, client: client}
+	p := &Plugin{app: app, options: options, client: client, analyticsGate: make(chan struct{}, 1), analyticsCache: map[string]analyticsCacheEntry{}, overviewCache: map[string]AnalyticsOverview{}}
 	lifetime, stop := context.WithCancel(context.Background())
 	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{Id: "push", Func: func(e *core.TerminateEvent) error {
 		stop()
@@ -249,6 +249,18 @@ func (p *Plugin) call(ctx context.Context, app core.App, action string, args jso
 		}
 		err := p.Cancel(app, in.RunID)
 		return map[string]any{"cancelled": err == nil}, err
+	case "analytics_overview":
+		var in OverviewInput
+		if err := decode(&in); err != nil {
+			return nil, err
+		}
+		return p.AnalyticsOverview(ctx, app, in)
+	case "analytics":
+		var in AnalyticsInput
+		if err := decode(&in); err != nil {
+			return nil, err
+		}
+		return p.Analytics(ctx, app, in)
 	default:
 		return nil, textError("неизвестное действие")
 	}
@@ -279,6 +291,8 @@ func (p *Plugin) MCPTools() []mcp.Tool {
 		{"test", "Отправить только на явно выбранные тестовые устройства", test, false, true},
 		{"runs", "Последние 100 запусков", mcp.Object(map[string]any{}), true, true},
 		{"report", "Статус, открытия через приложение, бизнес-конверсии и AppMetrica group ID", mcp.Object(map[string]any{"runId": str}, "runId"), true, true},
+		{"analytics_overview", "Сравнение последних 10 кампаний с реальными отправками на конец периода. Дневные метрики AppMetrica и итоги; даты YYYY-MM-DD UTC, максимум 90 дней.", mcp.Object(map[string]any{"dateFrom": str, "dateTo": str}, "dateFrom", "dateTo"), true, true},
+		{"analytics", "Метрики только из AppMetrica: доставка/открытия, этапы конверсии и revenue RUB. scope=run (по умолчанию) или campaign (все реальные запуски). Кэш 5 минут; ошибки разделов не заменяются нулями.", mcp.Object(map[string]any{"runId": str, "scope": map[string]any{"type": "string", "enum": []string{"run", "campaign"}}}, "runId"), true, true},
 		{"refresh_report", "Восстановить причины старых неудачных отправок из AppMetrica (до 20 пакетов). Только запрос статуса, без повторной отправки", mcp.Object(map[string]any{"runId": str}, "runId"), false, true},
 		{"cancel", "Отменить запуск до наступления расписания", mcp.Object(map[string]any{"runId": str}, "runId"), false, true},
 	} {

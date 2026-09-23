@@ -4,6 +4,7 @@ package main
 
 import (
 	_ "github.com/NikitaVasin/pocket_mfo/example/migrations"
+	"github.com/NikitaVasin/pocket_mfo/plugins/currencyrates"
 	"github.com/NikitaVasin/pocket_mfo/plugins/dynamiclink"
 	"github.com/NikitaVasin/pocket_mfo/plugins/mcp"
 	"github.com/NikitaVasin/pocket_mfo/plugins/partnerlinks"
@@ -27,6 +28,7 @@ func main() {
 	partnerlinks.Register(app, partnerOptions)
 	bridge := mcp.Register(app, mcp.Options{ContentCollections: []string{"demo_offers", "partner_links", dynamiclink.SettingsCollection}})
 	push.Register(app, push.Options{AuthCollections: []string{"users"}, MCP: bridge})
+	currencyrates.Register(app)
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{Automigrate: false})
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

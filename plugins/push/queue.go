@@ -118,7 +118,7 @@ func (p *Plugin) prepare(app core.App, run *core.Record, d runDefinition) error 
 			}
 			ids = append(ids, literal(id))
 		}
-		query = "SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation FROM push_devices d WHERE d.enabled=1 AND d.id IN (" + strings.Join(ids, ",") + ")"
+		query = "SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation,d.platform FROM push_devices d WHERE " + eligibleDevice("d") + " AND d.id IN (" + strings.Join(ids, ",") + ")"
 	}
 	collection, err := app.FindCollectionByNameOrId(jobsCollection)
 	if err != nil {
@@ -246,7 +246,7 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 		if d.GroupID == 0 {
 			group, err := p.ensureGroup(ctx, cfg, d, run.Id)
 			if err != nil {
-				return p.deferJob(job, "AppMetrica: не удалось подготовить группу")
+				return p.deferJob(job, diagnostic("Подготовка группы: "+err.Error(), cfg.OAuthToken, d.OpenToken))
 			}
 			d.GroupID = group
 			run.Set("definition", d)
@@ -285,7 +285,7 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 					owners = append(owners, "(d.authCollection="+literal(c.Id)+" AND EXISTS (SELECT 1 FROM "+ident(c.Name)+" u WHERE u.id=d.userId))")
 				}
 			}
-			err = tx.DB().NewQuery(`SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation FROM json_each({:recipients}) r JOIN push_devices d ON d.id=json_extract(r.value,'$.id') WHERE d.enabled=1 AND d.userId=json_extract(r.value,'$.userId') AND d.authCollection=json_extract(r.value,'$.authCollection') AND d.generation=json_extract(r.value,'$.generation') AND (` + strings.Join(owners, " OR ") + `)`).Bind(dbx.Params{"recipients": string(snapshot)}).All(&valid)
+			err = tx.DB().NewQuery(`SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation,d.platform FROM json_each({:recipients}) r JOIN push_devices d ON d.id=json_extract(r.value,'$.id') WHERE ` + eligibleDevice("d") + ` AND d.userId=json_extract(r.value,'$.userId') AND d.authCollection=json_extract(r.value,'$.authCollection') AND d.generation=json_extract(r.value,'$.generation') AND (` + strings.Join(owners, " OR ") + `)`).Bind(dbx.Params{"recipients": string(snapshot)}).All(&valid)
 			if err != nil {
 				return err
 			}
@@ -314,7 +314,14 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 				if errors.As(err, &remote) && remote.status >= 400 && remote.status < 500 && remote.status != 429 && remote.status != 408 {
 					job.Set("status", "failed")
 				}
-				job.Set("error", "AppMetrica: отправка не подтверждена; проверяем статус")
+				message := "Отправка не подтверждена; проверяем статус без повторной отправки. "
+				if job.GetString("status") == "failed" {
+					message = "Отправка отклонена. "
+				}
+				if job.GetString("status") == "queued" {
+					message = "Лимит запросов; отправка будет повторена. "
+				}
+				job.Set("error", diagnostic(message+err.Error(), cfg.OAuthToken, d.OpenToken))
 			} else {
 				job.Set("status", "submitted")
 				job.Set("transferId", strconv.FormatInt(transfer, 10))
@@ -326,9 +333,9 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 		}
 	} else {
 		group, _ := strconv.ParseInt(job.GetString("groupId"), 10, 64)
-		transfer, state, err := p.transferStatus(ctx, cfg, group, job.GetString("clientId"))
+		transfer, state, detail, err := p.transferStatus(ctx, cfg, group, job.GetString("clientId"), d.OpenToken)
 		if err != nil {
-			return p.deferJob(job, "AppMetrica: статус пока неизвестен")
+			return p.deferJob(job, diagnostic("Проверка статуса: "+err.Error(), cfg.OAuthToken, d.OpenToken))
 		}
 		switch state {
 		case "sent", "failed":
@@ -339,7 +346,14 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 			return p.deferJob(job, "AppMetrica: неизвестный статус")
 		}
 		job.Set("transferId", strconv.FormatInt(transfer, 10))
-		job.Set("error", "")
+		message := ""
+		if state == "failed" {
+			message = "AppMetrica отклонила отправку: " + detail
+			if detail == "" {
+				message = "AppMetrica отклонила отправку, но не вернула причину. Проверьте настройки отправителей FCM/APNs в AppMetrica."
+			}
+		}
+		job.Set("error", diagnostic(message, cfg.OAuthToken, d.OpenToken))
 		job.Set("nextAttempt", time.Now().Add(time.Minute))
 		if err = save(p.app, job); err != nil {
 			return err
@@ -435,6 +449,32 @@ func (p *Plugin) Report(app core.App, id string) (map[string]any, error) {
 	}
 	result["appmetricaGroupId"] = strconv.FormatInt(d.GroupID, 10)
 	result["test"] = d.Test
+	jobs, err := app.FindRecordsByFilter(jobsCollection, "runId={:id}", "created,id", 0, 0, dbx.Params{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	batches := make([]map[string]any, 0, len(jobs))
+	counts := map[string]int{}
+	for _, job := range jobs {
+		var definition jobDefinition
+		if err = decodeRecord(job, &definition); err != nil {
+			return nil, err
+		}
+		status := job.GetString("status")
+		counts[status]++
+		next := ""
+		if status == "queued" || status == "submitted" || status == "unknown" {
+			next = job.GetString("nextAttempt")
+		}
+		batches = append(batches, map[string]any{
+			"id": job.Id, "status": status, "recipients": len(definition.Recipients),
+			"error": job.GetString("error"), "clientTransferId": job.GetString("clientId"),
+			"transferId": job.GetString("transferId"), "appmetricaGroupId": job.GetString("groupId"),
+			"deferrals": job.GetInt("attempts"), "nextAttempt": next, "updated": job.GetString("updated"),
+		})
+	}
+	result["jobs"] = batches
+	result["jobCounts"] = counts
 	if _, err := app.FindCollectionByNameOrId("conversations"); err == nil {
 		type metric struct {
 			Status   string  `db:"status" json:"status"`
@@ -450,4 +490,58 @@ func (p *Plugin) Report(app core.App, id string) (map[string]any, error) {
 		result["conversions"] = rows
 	}
 	return result, nil
+}
+
+// RefreshReport recovers diagnostics for failed transfers, including legacy runs.
+// It only queries provider status and never sends or retries a notification.
+func (p *Plugin) RefreshReport(ctx context.Context, app core.App, id string) (map[string]any, error) {
+	if !p.worker.TryLock() {
+		return nil, textError("обрабатывается очередь; повторите обновление позже")
+	}
+	defer p.worker.Unlock()
+	run, err := app.FindRecordById(RunsCollection, id)
+	if err != nil {
+		return nil, textError("запуск не найден")
+	}
+	var d runDefinition
+	if err = decodeRecord(run, &d); err != nil {
+		return nil, err
+	}
+	cfg, err := Load(app)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ApplicationID != d.ApplicationID {
+		return nil, textError("приложение изменилось")
+	}
+	jobs, err := app.FindRecordsByFilter(jobsCollection, "runId={:id} && status='failed' && error=''", "created,id", 20, 0, dbx.Params{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	for _, job := range jobs {
+		group, _ := strconv.ParseInt(job.GetString("groupId"), 10, 64)
+		if group == 0 || job.GetString("clientId") == "" {
+			continue
+		}
+		_, state, detail, err := p.transferStatus(ctx, cfg, group, job.GetString("clientId"), d.OpenToken)
+		if err != nil {
+			return nil, textError(diagnostic("Не удалось запросить причину: "+err.Error(), cfg.OAuthToken, d.OpenToken))
+		}
+		if state != "failed" {
+			continue
+		}
+		if detail == "" {
+			detail = "провайдер не вернул причину; проверьте настройки отправителей FCM/APNs в AppMetrica"
+		}
+		job.Set("error", diagnostic("AppMetrica отклонила отправку: "+detail, cfg.OAuthToken, d.OpenToken))
+		if err = save(app, job); err != nil {
+			return nil, err
+		}
+	}
+	if len(jobs) > 0 {
+		if err = p.updateRun(id); err != nil {
+			return nil, err
+		}
+	}
+	return p.Report(app, id)
 }

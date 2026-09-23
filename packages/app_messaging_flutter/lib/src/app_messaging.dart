@@ -14,6 +14,11 @@ final class AppMessaging {
     : _driver = driver ?? NativeMessagingDriver();
 
   final MessagingDriver _driver;
+  final _permissions = StreamController<NotificationPermission>.broadcast();
+
+  /// Results of explicit system permission requests, including startup prompts.
+  Stream<NotificationPermission> get permissionChanges => _permissions.stream;
+
   final Queue<PushAction> _pending = Queue();
   final LinkedHashSet<String> _seen = LinkedHashSet();
   StreamSubscription<PushAction>? _subscription;
@@ -65,9 +70,11 @@ final class AppMessaging {
     }
   }
 
-  Future<NotificationPermission> requestPermission() {
+  Future<NotificationPermission> requestPermission() async {
     _checkReady();
-    return _driver.requestPermission();
+    final permission = await _driver.requestPermission();
+    if (!_disposed) _permissions.add(permission);
+    return permission;
   }
 
   Future<NotificationPermission> getPermission() {
@@ -127,9 +134,11 @@ final class AppMessaging {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
     _disposed = true;
     _pending.clear();
     await _subscription?.cancel();
+    await _permissions.close();
     await _driver.dispose();
   }
 }

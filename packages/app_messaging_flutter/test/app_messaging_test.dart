@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeDriver implements MessagingDriver {
   final events = StreamController<PushAction>.broadcast(sync: true);
   final started = Completer<void>();
+  Completer<NotificationPermission>? permissionResult;
   int permissions = 0;
   int activations = 0;
   PushAction? launchAction;
@@ -21,7 +22,7 @@ class FakeDriver implements MessagingDriver {
   @override
   Future<NotificationPermission> requestPermission() async {
     permissions++;
-    return NotificationPermission.denied;
+    return permissionResult?.future ?? NotificationPermission.denied;
   }
 
   @override
@@ -42,6 +43,24 @@ PushAction tap(String id) => PushAction(
 );
 
 void main() {
+  test('permission request publishes its result and pending request tolerates disposal', () async {
+    final driver = FakeDriver()..started.complete();
+    final service = AppMessaging(driver: driver);
+    final values = <NotificationPermission>[];
+    final subscription = service.permissionChanges.listen(values.add);
+    await service.initialize(appMetricaApiKey: 'key', onAction: (_) async {});
+    await service.requestPermission();
+    await Future<void>.delayed(Duration.zero);
+    expect(values, [NotificationPermission.denied]);
+    driver.permissionResult = Completer<NotificationPermission>();
+    final pending = service.requestPermission();
+    await service.dispose();
+    driver.permissionResult!.complete(NotificationPermission.authorized);
+    expect(await pending, NotificationPermission.authorized);
+    expect(values, [NotificationPermission.denied]);
+    await subscription.cancel();
+  });
+
   test(
     'cold tap waits for SDK readiness and duplicate tap is delivered once',
     () async {

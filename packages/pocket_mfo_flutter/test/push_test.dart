@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'pocket_mfo_test.dart' show Analytics, Backend;
 
 class LaunchDriver implements MessagingDriver {
   final stream = StreamController<PushAction>.broadcast(sync: true);
+  NotificationPermission permission = NotificationPermission.denied;
   int starts = 0;
   int permissionRequests = 0;
   bool disposed = false;
@@ -26,12 +28,11 @@ class LaunchDriver implements MessagingDriver {
   }
 
   @override
-  Future<NotificationPermission> getPermission() async =>
-      NotificationPermission.denied;
+  Future<NotificationPermission> getPermission() async => permission;
   @override
   Future<NotificationPermission> requestPermission() async {
     permissionRequests++;
-    return NotificationPermission.denied;
+    return permission;
   }
 
   @override
@@ -46,6 +47,58 @@ class LaunchDriver implements MessagingDriver {
 }
 
 void main() {
+  testWidgets(
+    'permission request and resume synchronize the same installation',
+    (tester) async {
+      final backend = Backend();
+      final driver = LaunchDriver();
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: navigator, home: const Text('Ready')),
+      );
+      final errors = <Object>[];
+      final app = PocketMfo(
+        pocketBase: backend.client(),
+        authCollection: 'users',
+        appMetricaConfig: const AppMetricaConfig('test'),
+        analytics: Analytics(),
+        storage: MemorySessionStorage(),
+        onError: (error, _) => errors.add(error),
+        push: PocketMfoPushConfig(
+          navigatorKey: navigator,
+          onNavigate: (_) async {},
+          messagingDriver: driver,
+          registerDevices: true,
+          deviceId: () async => '42',
+        ),
+      );
+      addTearDown(app.dispose);
+      await app.initialize();
+      await tester.pumpAndSettle();
+      Map<String, dynamic> lastRegistration() => jsonDecode(
+        backend.requests
+            .lastWhere((r) => r.url.path == '/api/push/devices')
+            .body,
+      ) as Map<String, dynamic>;
+      final initial = lastRegistration();
+      expect(initial['notificationPermission'], 'denied');
+      expect(initial['enabled'], false);
+      driver.permission = NotificationPermission.authorized;
+      await app.messaging!.requestPermission();
+      await tester.pumpAndSettle();
+      expect(lastRegistration()['notificationPermission'], 'authorized');
+      expect(lastRegistration()['enabled'], true);
+      expect(lastRegistration()['id'], initial['id']);
+      driver.permission = NotificationPermission.deniedPermanently;
+      app.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(lastRegistration()['notificationPermission'], 'deniedPermanently');
+      expect(lastRegistration()['enabled'], false);
+      expect(lastRegistration()['secret'], initial['secret']);
+      expect(errors, isEmpty);
+    },
+  );
+
   for (final automatic in [true, false]) {
     testWidgets('startup permission enabled=$automatic is forwarded once', (
       tester,

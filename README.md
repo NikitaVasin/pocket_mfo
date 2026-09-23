@@ -2,6 +2,8 @@
 
 Набор подключаемых Go-плагинов и общий стенд для их проверки.
 
+**Интеграция в приложение с AI-агентом:** [единое руководство](docs/AI_INTEGRATION.md) — обязательное интервью, устройство всех плагинов, подключение Go/Flutter, необходимые ключи и файлы, настройка AppMetrica/Firebase/APNs, постбеков и MCP, проверки и передача результата.
+
 | Плагин | Возможности |
 | --- | --- |
 | [Polymorphic Relation](plugins/polymorphicrelation) | Одно поле с одним родителем из нескольких коллекций; штатные relation-столбцы, нативная админка, `expand` |
@@ -133,7 +135,7 @@ Docker smoke-тест использует собственный Compose projec
 
 ## Flutter workspace и запускаемый пример
 
-`.fvmrc` закрепляет стабильный Flutter **3.47.5** (Dart **3.13.4**). Корневой `pubspec.yaml` объединяет пять пакетов и приложение; зависимости фиксируются единым `pubspec.lock`. Исходный workspace `mfo_hub` не используется.
+`.fvmrc` закрепляет стабильный Flutter **3.47.5** (Dart **3.13.4**). Корневой `pubspec.yaml` объединяет шесть пакетов и приложение; зависимости фиксируются единым `pubspec.lock`. Исходный workspace `mfo_hub` не используется.
 
 [app_messaging_flutter](packages/app_messaging_flutter/README.md) объединяет Firebase Core/Messaging и AppMetrica Analytics/Push с обязательным callback нажатия. [push_links_flutter](packages/push_links_flutter/README.md) предоставляет callback для маршрутов и партнёрских ссылок: успешная ссылка открывается в WebView поверх приложения, неудачный resolve не меняет экран.
 

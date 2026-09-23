@@ -113,6 +113,7 @@ type Preview struct {
 	TotalUsers *int `json:"totalUsers,omitempty" db:"totalUsers"`
 }
 type Recipient struct {
+	Platform       string `json:"platform" db:"platform"`
 	ID             string `json:"id" db:"id"`
 	DeviceID       string `json:"deviceId" db:"deviceId"`
 	UserID         string `json:"userId" db:"userId"`

@@ -1,18 +1,35 @@
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=2" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=5" }));
 app.store.headerLinks = [...app.store.headerLinks, { label: "Пуши", href: "#/push", icon: "ri-notification-3-line" }];
 app.routes.superuserOnly("#/push", () => t.div({ className: "page push-shell" }, pushPage()));
+const pushDeviceCollection = collection => collection?.name === "push_devices";
+watch(() => pushDeviceCollection(app.store.activeCollection), active => document.body.classList.toggle("push-devices-active", !!active));
+const pushRecordUpsert = app.modals.openRecordUpsert;
+app.modals.openRecordUpsert = function(collection, record, options) {
+    if (!pushDeviceCollection(collection)) return pushRecordUpsert(collection, record, options);
+    const id = typeof record === "string" ? record : record?.id;
+    if (id) return app.modals.openRecordPreview({ id, collectionId: collection.id });
+    app.toasts.error("Устройства регистрируются и обновляются приложением.");
+};
+const pushRecordsList = app.components.recordsList;
+app.components.recordsList = function(props = {}) {
+    return pushRecordsList({ ...props, collection: () => {
+        const collection = typeof props.collection === "function" ? props.collection() : props.collection;
+        return pushDeviceCollection(collection) ? { ...collection, type: "view" } : collection;
+    } });
+};
 function pushPage() {
     const control = (props) => t.div({ className: "field" }, t.input(props));
     app.store.title = "Пуши";
     const blankCampaign = () => ({ version: 0, name: "", allUsers: false, audienceIds: [], excludeAudienceIds: [], lastDeviceOnly: false, cooldownHours: 24, message: { title: "", text: "", action: "app", target: "", image: "" } });
-    const s = store({ tab: "Кампании", loaded: false, busy: false, error: "", notice: "", data: null, campaign: blankCampaign(), audience: null, dirty: false, preview: null, schedule: "", testDevices: [], launchKey: "", report: null, links: [], linksLoaded: false, linksLoading: false, linksError: "", coverage: null, coverageLoading: false, coverageError: "" });
+    const s = store({ tab: "Кампании", modalOpen: false, loaded: false, busy: false, error: "", notice: "", data: null, campaign: blankCampaign(), audience: null, dirty: false, preview: null, schedule: "", testDevices: [], launchKey: "", report: null, links: [], linksLoaded: false, linksLoading: false, linksError: "", coverage: null, coverageLoading: false, coverageError: "" });
     let nextID = 0;
+    let activeModal = null;
     const copy = value => JSON.parse(JSON.stringify(value));
     const api = (action, body = {}) => app.pb.send(`/api/push/admin/${action}`, { method: "POST", body, requestKey: null });
-    async function load() { s.data = await app.pb.send("/api/push/admin/state", { requestKey: null }); s.loaded = true; }
+    async function load() { s.data = await app.pb.send("/api/push/admin/state", { requestKey: null }); s.loaded = true; if (s.report) s.report = await api("report", { runId: s.report.id }); }
     async function run(fn) { if (s.busy) return; s.busy = true; s.error = ""; s.notice = ""; try { await fn(); } catch (e) { s.error = e?.response?.message || e.message || "Не удалось выполнить запрос"; app.toasts.error(s.error); } finally { s.busy = false; if (s.notice) app.toasts.success(s.notice); } }
     let coverageTimer, coverageRevision = 0;
-    const coverageWatcher = watch(() => s.tab === "Аудитории" && s.audience ? JSON.stringify(s.audience) : "", value => {
+    const coverageWatcher = watch(() => s.tab === "Аудитории" && s.modalOpen && s.audience ? JSON.stringify(s.audience) : "", value => {
         clearTimeout(coverageTimer); coverageRevision++;
         s.coverage = null; s.coverageError = ""; s.coverageLoading = !!value;
         if (value) coverageTimer = setTimeout(() => countAudience(JSON.parse(value)), 400);
@@ -82,15 +99,42 @@ function pushPage() {
                     field("Сравнение", node, "op", { choices: [["eq", "Равно"], ["ne", "Не равно"], ["gt", "Больше"], ["gte", "Не меньше"], ["lt", "Меньше"], ["lte", "Не больше"], ["empty", "Пусто"], ["withinHours", "За последние N часов"], ["olderHours", "Раньше N часов назад"]] }),
                     (() => { const collectionName = node.source === "device" ? "push_devices" : node.source === "conversion" ? "conversations" : s.audience.authCollection; const type = s.data.fields[collectionName]?.fields.find(f => f.name === node.field)?.type; if (node.op === "empty") return null; if (type === "bool") return t.label({ className: "push-check" }, t.input({ type: "checkbox", checked: () => node.value === true, onchange: e => { node.value = e.target.checked; changed(); } }), "Да"); return field("Значение", node, "value", { number: type === "number" || ["withinHours", "olderHours"].includes(node.op) }); })()));
     }
+    function audienceConditions(node) {
+        if (!node) return 0;
+        if (node.children) return node.children.reduce((total, child) => total + audienceConditions(child), 0);
+        return 1;
+    }
     function audiences() {
-        return t.div({ className: "push-workspace" },
-            t.aside(null, t.h2(null, "Аудитории"), button("Новая аудитория", async () => { s.audience = { version: 0, name: "", authCollection: s.data.authCollections[0] || "users", condition: { kind: "all", children: [leaf()] }, userIds: [], excludeUserIds: [] }; s.preview = null; }),
-                ...s.data.audiences.map(a => button(a.name, async () => { s.audience = copy(a); s.preview = null; }))),
-            () => s.audience ? t.section(null, t.h2(null, s.audience.id ? "Редактирование аудитории" : "Новая аудитория"), field("Название аудитории", s.audience, "name"), field("Пользователи", s.audience, "authCollection", { choices: s.data.authCollections.map(v => [v, v]) }),
-                coverage(), t.h3(null, "Условия"), () => s.audience.condition ? condition(s.audience.condition) : t.p(null, "Все пользователи с доступными устройствами."),
-                t.div({ className: "push-actions" }, button("Все пользователи", async () => { s.audience.condition = null; }), button("Добавить условия", async () => { s.audience.condition = { kind: "all", children: [leaf()] }; })),
-                listIDs("Только эти user ID (через запятую)", s.audience, "userIds"), listIDs("Исключить user ID", s.audience, "excludeUserIds"),
-                t.div({ className: "push-actions" }, button("Сохранить аудиторию", async () => { s.audience = await api("audience_save", s.audience); await load(); s.notice = "Аудитория сохранена."; }, true), button("Обновить подсчёт", () => countAudience()))) : t.section(null, t.h2(null, "Кому отправить сообщение"), t.p(null, "Выберите аудиторию или создайте новую. Условия вычисляются по актуальным данным перед отправкой.")));
+        return t.section({ className: "push-audiences" },
+            t.div({ className: "push-actions" }, t.h2(null, "Аудитории"), button("Новая аудитория", () => editAudience(), true)),
+            !s.data.audiences.length ? t.p({ className: "push-empty" }, "Аудиторий пока нет. Создайте первую, чтобы выбрать пользователей и условия получения уведомлений.") : null,
+            t.div({ className: "push-audience-list" }, ...s.data.audiences.map(a => {
+                const usedBy = s.data.campaigns.filter(c => c.audienceIds?.includes(a.id) || c.excludeAudienceIds?.includes(a.id)).length;
+                return t.article({ className: "push-audience-card" },
+                    t.div({ className: "push-card-heading" }, t.h3(null, a.name), t.small({ className: "txt-hint" }, `Коллекция: ${a.authCollection}`)),
+                    t.p(null, a.condition ? `Условий отбора: ${audienceConditions(a.condition)}` : "Все пользователи с разрешёнными уведомлениями"),
+                    a.userIds?.length ? t.p({ className: "txt-hint" }, `Выбрано пользователей по ID: ${a.userIds.length}`) : null,
+                    a.excludeUserIds?.length ? t.p({ className: "txt-hint" }, `Исключено пользователей по ID: ${a.excludeUserIds.length}`) : null,
+                    t.small({ className: "txt-hint" }, `Используется в кампаниях: ${usedBy}. Актуальный охват — в редакторе.`),
+                    t.div({ className: "push-actions" }, button("Редактировать", () => editAudience(a))));
+            })));
+    }
+    function editAudience(audience) {
+        s.audience = audience ? copy(audience) : { version: 0, name: "", authCollection: s.data.authCollections[0] || "users", condition: { kind: "all", children: [leaf()] }, userIds: [], excludeUserIds: [] };
+        s.dirty = false; s.preview = null; s.error = ""; s.notice = "";
+        openPanel("audience", () => s.audience?.id ? "Редактирование аудитории" : "Новая аудитория", () => audienceEditor(),
+            button("Сохранить аудиторию", async () => {
+                s.audience = await api("audience_save", s.audience); s.dirty = false;
+                await load(); s.notice = "Аудитория сохранена.";
+            }, true));
+    }
+    function audienceEditor() {
+        if (!s.audience) return null;
+        return t.section(null, field("Название аудитории", s.audience, "name"), field("Пользователи", s.audience, "authCollection", { choices: s.data.authCollections.map(v => [v, v]) }),
+            coverage(), t.h3(null, "Условия"), () => s.audience?.condition ? condition(s.audience.condition) : t.p(null, "Все пользователи с разрешёнными уведомлениями."),
+            t.div({ className: "push-actions" }, button("Все пользователи", async () => { s.audience.condition = null; changed(); }), button("Добавить условия", async () => { s.audience.condition = { kind: "all", children: [leaf()] }; changed(); })),
+            listIDs("Только эти user ID (через запятую)", s.audience, "userIds"), listIDs("Исключить user ID", s.audience, "excludeUserIds"),
+            t.div({ className: "push-actions" }, button("Обновить подсчёт", () => countAudience())));
     }
     function listIDs(label, object, key) { return t.label({ className: "push-field" }, label, control({ value: () => (object[key] || []).join(", "), onchange: e => { object[key] = e.target.value.split(/[\s,]+/).filter(Boolean); changed(); } })); }
     function preview() { return () => s.preview ? t.p({ role: "status", className: "push-preview" }, `${s.preview.users} пользователей · ${s.preview.devices} устройств`) : null; }
@@ -103,19 +147,84 @@ function pushPage() {
                 s.campaign.allUsers ? t.p({ className: "txt-hint" }, "Все пользователи с доступными устройствами во всех подключённых коллекциях. Исключения, выбор последнего устройства и интервал между рассылками учитываются.") : null),
             s.campaign.allUsers ? null : multi("Получатели", s.data.audiences, s.campaign, "audienceIds"));
     }
+    function openPanel(kind, title, content, footer) {
+        if (activeModal) return;
+        const opener = document.activeElement;
+        const titleID = `push-dialog-${++nextID}`;
+        const modal = t.div({ className: `modal lg push-modal push-${kind}-modal`, role: "dialog", ariaModal: "true", "html-aria-labelledby": titleID,
+            onbeforeclose: (_, forced) => {
+                if (forced) return true;
+                if (s.busy) return false;
+                if (!["campaign", "audience"].includes(kind) || !s.dirty) return true;
+                return new Promise(resolve => app.modals.confirm(`Закрыть без сохранения изменений ${kind === "audience" ? "аудитории" : "кампании"}?`, () => resolve(true), () => resolve(false), { yesButton: "Не сохранять", noButton: "Продолжить редактирование" }));
+            },
+            onafterclose: el => {
+                activeModal = null; s.modalOpen = false;
+                s.error = ""; s.notice = ""; s.report = null; s.audience = null;
+                el.remove();
+                if (opener?.isConnected) opener.focus({ preventScroll: true });
+            },
+            onkeydown: e => {
+                if (app.modals.getTop() !== modal) return;
+                if (e.key === "Escape" && !document.querySelector(":popover-open")) { e.preventDefault(); e.stopPropagation(); app.modals.close(modal); }
+                if (e.key !== "Tab") return;
+                const targets = [...modal.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary, [tabindex="0"]')].filter(el => el.getClientRects().length);
+                const first = targets[0], last = targets.at(-1);
+                if (e.shiftKey && (document.activeElement === first || document.activeElement === modal)) { e.preventDefault(); last?.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+            },
+        }, t.header({ className: "modal-header" }, t.h5({ id: titleID, className: "modal-title" }, title),
+            t.button({ type: "button", className: "btn sm circle transparent modal-close-btn m-l-auto", ariaLabel: "Закрыть диалог", disabled: () => s.busy, onclick: () => app.modals.close(modal) }, t.i({ className: "ri-close-line", ariaHidden: true }))),
+            t.div({ className: "modal-content push-modal-content" },
+                () => s.error ? t.div({ role: "alert", className: "alert danger" }, s.error) : null,
+                () => s.notice ? t.div({ role: "status", className: "push-notice" }, s.notice) : null,
+                content),
+            t.footer({ className: "modal-footer" }, t.button({ type: "button", className: "btn secondary", disabled: () => s.busy, onclick: () => app.modals.close(modal) }, "Закрыть"), footer));
+        activeModal = modal;
+        s.modalOpen = true;
+        root.append(modal);
+        app.modals.open(modal);
+    }
+    function editCampaign(campaign) {
+        s.campaign = campaign ? copy(campaign) : blankCampaign();
+        s.dirty = false; s.preview = null; s.launchKey = ""; s.schedule = ""; s.testDevices = []; s.error = ""; s.notice = "";
+        if (s.campaign.message.action === "partner" && !s.linksLoaded) loadLinks();
+        openPanel("campaign", () => s.campaign.id ? "Редактирование кампании" : "Новая кампания", () => campaignEditor(),
+            button("Сохранить кампанию", async () => {
+                if (s.campaign.message.action === "app") s.campaign.message.target = "";
+                s.campaign = await api("campaign_save", s.campaign); s.dirty = false;
+                await load(); s.notice = "Кампания сохранена. Отправка ещё не запущена.";
+            }, true));
+    }
+    async function openReport(id) {
+        s.report = await api("report", { runId: id });
+        openPanel("report", "Результаты запуска", () => report(), button("Обновить результаты", load));
+    }
     function campaigns() {
-        return t.div({ className: "push-workspace" }, t.aside(null, t.h2(null, "Кампании"), button("Новая кампания", async () => { s.campaign = blankCampaign(); s.dirty = false; s.preview = null; s.launchKey = ""; s.schedule = ""; s.testDevices = []; }), ...s.data.campaigns.map(c => button(c.name, async () => { s.campaign = copy(c); s.dirty = false; s.preview = null; s.launchKey = ""; s.schedule = ""; s.testDevices = []; if (s.campaign.message.action === "partner" && !s.linksLoaded) loadLinks(); }))),
-            () => t.section(null, t.h2(null, s.campaign.id ? "Редактирование кампании" : "Новая кампания"), field("Название кампании", s.campaign, "name"),
+        return t.section({ className: "push-campaigns" },
+            t.div({ className: "push-actions" }, t.h2(null, "Кампании"), button("Новая кампания", () => editCampaign(), true)),
+            !s.data.campaigns.length ? t.p({ className: "push-empty" }, "Кампаний пока нет. Создайте первую, чтобы подготовить сообщение и выбрать получателей.") : null,
+            t.div({ className: "push-campaign-list" }, ...s.data.campaigns.map(c => {
+                const latest = s.data.runs.find(r => r.campaignId === c.id);
+                return t.article({ className: "push-campaign-card" },
+                    t.div({ className: "push-card-heading" }, t.h3(null, c.name), latest ? statusBadge(latest.status) : statusBadge("draft")),
+                    t.strong(null, c.message.title), t.p({ className: "push-card-text" }, c.message.text),
+                    t.small({ className: "txt-hint" }, c.allUsers ? "Все пользователи с разрешёнными уведомлениями" : `Аудитории: ${c.audienceIds.map(id => s.data.audiences.find(a => a.id === id)?.name || id).join(", ")}`),
+                    t.div({ className: "push-actions" }, button("Редактировать", () => editCampaign(c)), latest ? button("Результаты", () => openReport(latest.id)) : null));
+            })));
+    }
+    function campaignEditor() {
+        return t.section(null, field("Название кампании", s.campaign, "name"),
                 t.div({ className: "push-composer" }, t.div(null, field("Заголовок", s.campaign.message, "title"), field("Текст уведомления", s.campaign.message, "text", { multiline: true }), field("Изображение HTTPS", s.campaign.message, "image")), t.div({ className: "push-notification", ariaLabel: "Предпросмотр уведомления" }, t.small(null, "УВЕДОМЛЕНИЕ"), t.strong(null, () => s.campaign.message.title || "Заголовок"), t.p(null, () => s.campaign.message.text || "Текст сообщения"))),
                 field("При нажатии", s.campaign.message, "action", { choices: [["app", "Открыть приложение"], ["route", "Открыть экран"], ["partner", "Открыть партнёрское предложение"]] }),
                 () => s.campaign.message.action === "partner" ? partnerSelect() : s.campaign.message.action === "route" ? field("Маршрут", s.campaign.message, "target", { hint: "Например, /offers. Экран откроется внутри приложения." }) : null,
                 recipients(), s.data.audiences.length ? multi("Исключить аудитории", s.data.audiences, s.campaign, "excludeAudienceIds") : null,
                 check("Только последнее активное устройство пользователя", s.campaign, "lastDeviceOnly"), field("Минимальный интервал между рассылками, часов", s.campaign, "cooldownHours", { number: true, min: 0, max: 8760 }),
-                t.div({ className: "push-actions" }, button("Сохранить кампанию", async () => { if (s.campaign.message.action === "app") s.campaign.message.target = ""; s.campaign = await api("campaign_save", s.campaign); s.dirty = false; await load(); s.notice = "Кампания сохранена. Отправка ещё не запущена."; }, true), button("Проверить аудиторию", async () => { s.preview = await api("preview", { campaignId: s.campaign.id }); }, false, () => !s.campaign.id || s.dirty)), preview(),
+                t.div({ className: "push-actions" }, button("Проверить аудиторию", async () => { s.preview = await api("preview", { campaignId: s.campaign.id }); }, false, () => !s.campaign.id || s.dirty)), preview(),
                 t.div({ className: "push-launch" }, t.h3(null, "Запуск сохранённой кампании"), t.p({ className: "push-readiness", ariaLive: "polite" }, launchHint),
                     t.label({ className: "push-field" }, "Время отправки (пусто — сейчас)", control({ type: "datetime-local", value: () => s.schedule, onchange: e => { s.schedule = e.target.value; s.launchKey = ""; } })),
-                    button("Запустить рассылку", async () => { s.launchKey ||= crypto.randomUUID(); const r = await api("launch", { campaignId: s.campaign.id, version: s.campaign.version, idempotencyKey: s.launchKey, scheduledAt: s.schedule ? new Date(s.schedule).toISOString() : "" }); s.launchKey = ""; s.notice = `Запуск создан: ${r.id}. Статус: ${r.status}.`; await load(); }, true, () => !s.campaign.id || s.dirty || !s.preview?.devices || !s.data.config.hasOAuthToken),
-                    t.details({ className: "push-test" }, t.summary(null, "Тестовая отправка"), t.p(null, "Только выбранные устройства, без отправки всей аудитории. Сначала сохраните кампанию."), multi("Тестовые устройства (последние 100)", s.data.devices.filter(d => d.enabled), s, "testDevices"), button("Обновить устройства", load), button("Отправить тест", async () => { await api("test", { campaignId: s.campaign.id, version: s.campaign.version, idempotencyKey: crypto.randomUUID(), testDeviceIds: s.testDevices }); s.notice = "Тестовая отправка добавлена в очередь."; await load(); }, false, () => !s.campaign.id || s.dirty || !s.testDevices.length || !s.data.config.hasOAuthToken)))));
+                    button("Запустить рассылку", async () => { s.launchKey ||= crypto.randomUUID(); const r = await api("launch", { campaignId: s.campaign.id, version: s.campaign.version, idempotencyKey: s.launchKey, scheduledAt: s.schedule ? new Date(s.schedule).toISOString() : "" }); s.launchKey = ""; s.notice = `Запуск создан: ${r.id}. Статус: ${statuses[r.status]?.[0] || r.status}.`; await load(); }, true, () => !s.campaign.id || s.dirty || !s.preview?.devices || !s.data.config.hasOAuthToken),
+                    t.details({ className: "push-test" }, t.summary(null, "Тестовая отправка"), t.p(null, "Только выбранные устройства, без отправки всей аудитории. Сначала сохраните кампанию."), multi("Тестовые устройства (последние 100)", s.data.devices.filter(d => d.enabled && ["authorized", "provisional"].includes(d.notificationPermission)), s, "testDevices"), button("Обновить устройства", load), button("Отправить тест", async () => { await api("test", { campaignId: s.campaign.id, version: s.campaign.version, idempotencyKey: crypto.randomUUID(), testDeviceIds: s.testDevices }); s.notice = "Тестовая отправка добавлена в очередь."; await load(); }, false, () => !s.campaign.id || s.dirty || !s.testDevices.length || !s.data.config.hasOAuthToken))));
     }
     function launchHint() {
         if (!s.campaign.id) return "Сначала сохраните кампанию. Сохранение не запускает отправку.";
@@ -146,8 +255,53 @@ function pushPage() {
             },
             () => s.linksError ? t.div({ role: "alert", className: "push-inline-help" }, s.linksError, t.button({ type: "button", className: "btn sm secondary", onclick: loadLinks }, "Повторить загрузку ссылок")) : s.linksLoaded && !s.links.some(link => link.active) ? t.p({ className: "push-empty" }, "Нет активных партнёрских ссылок. Создайте или включите предложение в коллекции partner_links.") : t.small({ className: "txt-hint" }, "Поиск по названию, провайдеру или ID. В кампании сохраняется ID выбранной ссылки."));
     }
-    function history() { return t.section(null, t.div({ className: "push-actions" }, t.h2(null, "История запусков"), button("Обновить", load)), s.data.runs.length ? t.div(null, ...s.data.runs.map(r => t.article({ className: "push-run" }, t.div(null, t.strong(null, r.name), t.p(null, `${r.status} · ${r.recipients} устройств`), t.small(null, r.created), r.error ? t.p({ role: "alert" }, r.error) : null), t.div({ className: "push-actions" }, button("Результаты", async () => { s.report = await api("report", { runId: r.id }); }), r.status === "scheduled" ? button("Отменить", async () => { await api("cancel", { runId: r.id }); await load(); }) : null)))) : t.p(null, "Рассылок пока нет."),
-        () => s.report ? t.div({ className: "push-report" }, t.h3(null, s.report.name), t.p(null, `Статус: ${s.report.status}. Открытия, зарегистрированные приложением: ${s.report.opens}.`), t.p(null, `Группа в AppMetrica: ${s.report.appmetricaGroupId}`), ...(s.report.conversions || []).map(c => t.p(null, `${c.status}: ${c.count} · ${c.amount} ${c.currency}`)), t.small(null, "Отправлено не означает доставлено. Доставка и открытия SDK доступны в отчёте AppMetrica. Суммы сгруппированы по статусу и валюте.")) : null); }
+    const statuses = {
+        draft: ["Черновик", "neutral"], scheduled: ["Запланирована", "info"], queued: ["В очереди", "info"], sending: ["Отправляется", "info"],
+        submitted: ["Принята AppMetrica", "info"], sent: ["Отправлена", "success"], failed: ["Ошибка", "danger"],
+        unknown: ["Статус неизвестен", "warning"], cancelled: ["Отменена", "neutral"], empty: ["Нет получателей", "neutral"],
+    };
+    function statusBadge(status) {
+        const [label, tone] = statuses[status] || [status || "Нет статуса", "neutral"];
+        return t.span({ className: `push-status push-status-${tone}`, title: status }, label);
+    }
+    function failureText(item) {
+        return item.error || (item.status === "failed" ? "Причина не сохранена. Запросите детали в AppMetrica." : "");
+    }
+    function report() {
+        const r = s.report;
+        if (!r) return null;
+        return t.section({ className: "push-report", ariaLabel: "Результаты запуска" },
+            t.div({ className: "push-actions" }, t.h2(null, r.name), statusBadge(r.status)),
+            t.p(null, `Получателей в снимке: ${r.recipients}. Открытия в приложении: ${r.opens}.`),
+            failureText(r) ? t.div({ className: "push-diagnostic", role: "alert" }, t.strong(null, "Причина / последняя ошибка"), t.p(null, failureText(r))) : null,
+            r.status === "unknown" ? t.p(null, "Ответ на отправку не подтверждён. Сервер проверяет статус; автоматическая повторная отправка отключена, чтобы не создавать дубликаты.") : null,
+            t.p(null, `Группа в AppMetrica: ${r.appmetricaGroupId === "0" ? "ещё не создана" : r.appmetricaGroupId}`),
+            (r.jobs || []).some(j => j.status === "failed" && !j.error) ? t.div(null,
+                button("Запросить причину в AppMetrica", async () => { s.report = await api("refresh_report", { runId: r.id }); await load(); }),
+                t.small(null, "Только проверка статуса, без повторной отправки. До 20 пакетов за запрос.")) : null,
+            t.h3(null, "Пакеты отправки"),
+            t.div({ className: "push-job-counts" }, ...Object.entries(r.jobCounts || {}).map(([status, count]) => t.span(null, statusBadge(status), ` ${count}`))),
+            !(r.jobs || []).length ? t.p({ className: "push-empty" }, "Пакеты ещё не созданы или в аудитории нет устройств.") : null,
+            ...(r.jobs || []).map((j, index) => t.article({ className: "push-job" },
+                t.div({ className: "push-actions" }, t.strong(null, `Пакет ${index + 1} · ${j.recipients} устройств`), statusBadge(j.status)),
+                failureText(j) ? t.p({ className: "push-job-error" }, failureText(j)) : null,
+                t.dl({ className: "push-job-meta" },
+                    t.dt(null, "ID отправки AppMetrica"), t.dd(null, j.transferId || "не получен"),
+                    t.dt(null, "Client transfer ID"), t.dd(null, j.clientTransferId),
+                    t.dt(null, "Обновлён"), t.dd(null, j.updated || "—"),
+                    ...(j.nextAttempt ? [t.dt(null, j.status === "queued" ? "Следующая попытка" : "Следующая проверка статуса"), t.dd(null, j.nextAttempt)] : []),
+                    t.dt(null, "Отложенных проверок / попыток"), t.dd(null, String(j.deferrals || 0))))),
+            ...(r.conversions || []).map(c => t.p(null, `${c.status}: ${c.count} · ${c.amount} ${c.currency}`)),
+            t.small(null, "«Отправлена» не означает «Доставлена». Доставка и открытия SDK доступны в отчёте AppMetrica. Суммы сгруппированы по статусу и валюте."));
+    }
+    function history() {
+        return t.section(null, t.div({ className: "push-actions" }, t.h2(null, "История запусков"), button("Обновить", load)),
+            s.data.runs.length ? t.div(null, ...s.data.runs.map(r => t.article({ className: "push-run" },
+                t.div(null, t.strong(null, r.name), t.div({ className: "push-run-status" }, statusBadge(r.status), t.span(null, `${r.recipients} устройств`)),
+                    t.small(null, r.created), failureText(r) ? t.p({ className: "push-job-error" }, failureText(r)) : null),
+                t.div({ className: "push-actions" }, button("Результаты", () => openReport(r.id)),
+                    r.status === "scheduled" ? button("Отменить", async () => { await api("cancel", { runId: r.id }); await load(); }) : null)))) : t.p(null, "Рассылок пока нет."));
+    }
     function settings() {
         const locks = s.data.configLocks || { all: false, fields: [] };
         const locked = key => locks.all || locks.fields.includes(key);
@@ -170,11 +324,11 @@ function pushPage() {
                 await load(); s.notice = "Настройки сохранены.";
             }, true));
     }
-    function devices() { return t.section(null, t.div({ className: "push-actions" }, t.h2(null, "Устройства"), button("Обновить", load)), t.p(null, "Последние 100 устройств. Регистрация и разрешение обновляются приложением."), !s.data.devices.length ? t.p({ className: "push-empty" }, "Устройств пока нет. Они появятся после входа в приложение с подключённой регистрацией пушей.") : null, ...s.data.devices.map(d => t.article({ className: "push-run" }, t.div(null, t.strong(null, `${d.platform} · ${d.userId}`), t.p(null, `${d.language} · ${d.appVersion} · ${d.enabled ? "Включено" : "Отключено"}`), t.small(null, d.id + " · " + d.lastSeen))))); }
     run(load);
-    return t.div({ className: "push-page", onunmount: () => { clearTimeout(coverageTimer); coverageRevision++; coverageWatcher.unwatch(); } }, t.header(null, t.h1(null, "Пуши"), t.p(null, "Подготовьте сообщение, выберите аудиторию и запустите рассылку.")),
-        t.nav({ className: "push-tabs", ariaLabel: "Разделы пушей" }, ...["Кампании", "Аудитории", "История", "Устройства", "Настройки"].map(tab => t.button({ type: "button", className: () => `btn ${s.tab === tab ? "" : "secondary"}`, ariaPressed: () => String(s.tab === tab), disabled: () => s.busy, onclick: () => { s.tab = tab; s.error = ""; s.notice = ""; s.preview = null; } }, tab))),
-        () => s.error ? t.div({ role: "alert", className: "alert alert-danger" }, s.error) : null,
-        () => s.notice ? t.div({ role: "status", className: "push-notice" }, s.notice) : null,
-        () => !s.loaded ? t.div(null, t.p(null, s.error ? "Не удалось загрузить данные." : "Загрузка…"), s.error ? button("Повторить загрузку", load) : null) : s.tab === "Кампании" ? campaigns() : s.tab === "Аудитории" ? audiences() : s.tab === "История" ? history() : s.tab === "Устройства" ? devices() : settings());
+    const root = t.div({ className: "push-page", onunmount: () => { if (activeModal) app.modals.close(activeModal, true); clearTimeout(coverageTimer); coverageRevision++; coverageWatcher.unwatch(); } }, t.div({ inert: () => s.modalOpen }, t.header(null, t.h1(null, "Пуши"), t.p(null, "Подготовьте сообщение, выберите аудиторию и запустите рассылку.")),
+        t.nav({ className: "push-tabs", ariaLabel: "Разделы пушей" }, ...["Кампании", "Аудитории", "История", "Настройки"].map(tab => t.button({ type: "button", className: () => `btn ${s.tab === tab ? "" : "secondary"}`, ariaPressed: () => String(s.tab === tab), disabled: () => s.busy, onclick: () => { s.tab = tab; s.error = ""; s.notice = ""; s.preview = null; } }, tab))),
+        () => !s.modalOpen && s.error ? t.div({ role: "alert", className: "alert alert-danger" }, s.error) : null,
+        () => !s.modalOpen && s.notice ? t.div({ role: "status", className: "push-notice" }, s.notice) : null,
+        () => !s.loaded ? t.div(null, t.p(null, s.error ? "Не удалось загрузить данные." : "Загрузка…"), s.error ? button("Повторить загрузку", load) : null) : s.tab === "Кампании" ? campaigns() : s.tab === "Аудитории" ? audiences() : s.tab === "История" ? history() : settings()));
+    return root;
 }

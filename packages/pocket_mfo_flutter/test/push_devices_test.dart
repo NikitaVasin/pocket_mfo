@@ -73,6 +73,36 @@ void main() {
     });
   }
 
+  test('serializes permission independently of enabled and defaults to undetermined', () async {
+    final bodies = <Map<String, dynamic>>[];
+    final pb = PocketBase(
+      'https://pb.example',
+      httpClientFactory: () => MockClient((request) async {
+        bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+        return http.Response('{}', 200);
+      }),
+    );
+    pb.authStore.save('token', RecordModel({'id': 'user00000000001'}));
+    final devices = PushDevices(
+      pocketBase: pb,
+      storage: MemorySessionStorage(),
+      deviceId: () async => '42',
+    );
+    addTearDown(devices.dispose);
+    await devices.sync(enabled: true, language: 'ru');
+    expect(bodies.last['notificationPermission'], 'notDetermined');
+    for (final permission in NotificationPermission.values) {
+      await devices.sync(
+        enabled: false,
+        language: 'ru',
+        notificationPermission: permission,
+      );
+      expect(bodies.last['notificationPermission'], permission.name);
+      expect(bodies.last['enabled'], false);
+      expect(bodies.last['id'], bodies.first['id']);
+    }
+  });
+
   test('lost response and restart reuse installation credentials', () async {
     final storage = MemorySessionStorage();
     final requests = <Map<String, dynamic>>[];

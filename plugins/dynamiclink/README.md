@@ -10,7 +10,7 @@ import "github.com/NikitaVasin/pocket_mfo/plugins/dynamiclink"
 dynamiclink.Register(app) // до Bootstrap/Start
 ```
 
-Partner Links подключает этот плагин автоматически. При отдельном использовании добавьте поле в любую обычную или auth-коллекцию миграцией/Go-кодом:
+Регистрируйте плагин явно, в том числе при использовании Partner Links. Для своего поля добавьте его в любую обычную или auth-коллекцию миграцией/Go-кодом:
 
 ```go
 banners.Fields.Add(&dynamiclink.Field{
@@ -62,7 +62,7 @@ if err := app.Save(record); err != nil { return err }
 
 Неизвестные параметры, неверные типы, неподдерживаемая схема URL или режим отклоняются сервером. Скрытие/Required/Help поля работают через стандартные настройки PocketBase.
 
-Поле само не открывает URL и не отправляет аналитику. Во Flutter поля значения можно передать конструктору `DynamicLink(...)` из `packages/dynamic_link` и открыть ссылку существующим адаптером `dynamic_link_flutter`. Partner Links использует это же значение в ответе resolve, заменяя исходный URL публичной зашифрованной ссылкой.
+Поле само не открывает URL и не отправляет аналитику. Во Flutter поля значения можно передать конструктору `DynamicLink(...)` из `packages/dynamic_link` и открыть ссылку существующим адаптером `dynamic_link_flutter`. Partner Links использует это же значение в ответе resolve, заменяя исходный URL публичной ссылкой со случайным токеном.
 
 Проверки: `go test -race ./plugins/dynamiclink ./plugins/partnerlinks`, браузерные `dynamiclink.spec.js` и `partnerlinks.spec.js`.
 

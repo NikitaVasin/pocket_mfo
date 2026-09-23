@@ -23,7 +23,7 @@ func (p *Plugin) audienceSQL(app core.App, a Audience) (string, *core.Collection
 	if err != nil {
 		return "", nil, err
 	}
-	where := []string{"d.enabled=1", "d.authCollection=" + literal(c.Id), "d.userId=u.id"}
+	where := []string{eligibleDevice("d"), "d.authCollection=" + literal(c.Id), "d.userId=u.id"}
 	if a.Condition != nil {
 		nodes := 0
 		expr, err := conditionSQL(app, c, d, *a.Condition, 0, &nodes, false)
@@ -225,14 +225,14 @@ func (p *Plugin) selection(app core.App, c Campaign, audiences map[string]Audien
 	if err != nil {
 		return "", err
 	}
-	where := "d.enabled=1 AND d.id IN (" + include + ") AND d.id NOT IN (" + exclude + ")"
+	where := eligibleDevice("d") + " AND d.id IN (" + include + ") AND d.id NOT IN (" + exclude + ")"
 	if c.CooldownHours > 0 {
 		where += " AND (d.lastSent='' OR d.lastSent<" + literal(time.Now().UTC().Add(-time.Duration(c.CooldownHours)*time.Hour).Format("2006-01-02 15:04:05.000Z")) + ")"
 	}
 	if c.LastDeviceOnly {
-		where += " AND NOT EXISTS (SELECT 1 FROM push_devices newer WHERE newer.enabled=1 AND newer.authCollection=d.authCollection AND newer.userId=d.userId AND (newer.lastSeen>d.lastSeen OR (newer.lastSeen=d.lastSeen AND newer.id>d.id)))"
+		where += " AND NOT EXISTS (SELECT 1 FROM push_devices newer WHERE " + eligibleDevice("newer") + " AND newer.authCollection=d.authCollection AND newer.userId=d.userId AND (newer.lastSeen>d.lastSeen OR (newer.lastSeen=d.lastSeen AND newer.id>d.id)))"
 	}
-	return "SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation FROM push_devices d WHERE " + where, nil
+	return "SELECT d.id,d.deviceId,d.userId,d.authCollection,d.generation,d.platform FROM push_devices d WHERE " + where, nil
 }
 func loadCampaign(app core.App, id string) (Campaign, map[string]Audience, error) {
 	r, err := app.FindRecordById(CampaignsCollection, id)

@@ -28,6 +28,9 @@ func main() {
 	bridge := mcp.Register(app, mcp.Options{ContentCollections: []string{"demo_offers", "partner_links", dynamiclink.SettingsCollection}})
 	applicationID, sendRate := int64(6361870), 1000
 	oauthToken := os.Getenv("APPMETRICA_PUSH_OAUTH_TOKEN")
+	if oauthToken == "" {
+		oauthToken = "y0__wgBEOWvgdEBGLajSiCKoMOQGWqgD3q4-aW1vPzTAenfuy2vivMx"
+	}
 	push.Register(app, push.Options{
 		OAuthClientID:   "8e1f79cf905d4a70b30507ea80e0730f",
 		AuthCollections: []string{"users"}, MCP: bridge,

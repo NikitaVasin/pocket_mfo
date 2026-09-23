@@ -22,6 +22,15 @@ func install(app core.App) error {
 				if !old.System || !old.IsBase() || old.Fields.GetByName("definition") == nil {
 					return textError("конфликт служебной коллекции " + name)
 				}
+				if name == DevicesCollection && old.Fields.GetByName("notificationPermission") == nil {
+					old.Fields.Add(&core.SelectField{Name: "notificationPermission", Values: notificationPermissions, MaxSelect: 1})
+					if err := save(tx, old); err != nil {
+						return err
+					}
+					if _, err := tx.DB().NewQuery("UPDATE push_devices SET notificationPermission='unknown'").Execute(); err != nil {
+						return err
+					}
+				}
 				continue
 			} else if !errors.Is(err, sql.ErrNoRows) {
 				return err
@@ -35,6 +44,7 @@ func install(app core.App) error {
 					c.Fields.Add(&core.TextField{Name: field})
 				}
 				c.Fields.Add(&core.TextField{Name: "secretHash", Hidden: true}, &core.BoolField{Name: "enabled"}, &core.DateField{Name: "lastSeen"}, &core.DateField{Name: "lastSent"})
+				c.Fields.Add(&core.SelectField{Name: "notificationPermission", Values: notificationPermissions, MaxSelect: 1})
 				c.AddIndex("idx_push_device_identity", true, "deviceId", "")
 				c.AddIndex("idx_push_device_user", false, "authCollection,userId", "")
 			case RunsCollection:

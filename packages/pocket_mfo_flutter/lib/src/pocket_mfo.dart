@@ -34,6 +34,7 @@ final class PocketMfoPushConfig {
 
   /// Enable when the server installs plugins/push.
   final bool registerDevices;
+
   /// Override for the numeric AppMetrica API identifier (SDK DeviceIdHash).
   /// Do not return the hexadecimal AppMetrica.deviceId.
   final Future<String?> Function()? deviceId;
@@ -94,6 +95,7 @@ final class PocketMfo with WidgetsBindingObserver {
   Future<void>? _refreshing;
   int? _refreshEpoch;
   StreamSubscription<AuthStoreEvent>? _authSubscription;
+  StreamSubscription<NotificationPermission>? _permissionSubscription;
   AppMessaging? _messaging;
   PushLinkResolver? _resolver;
   bool _prepared = false;
@@ -526,6 +528,9 @@ final class PocketMfo with WidgetsBindingObserver {
           NativeMessagingDriver(analyticsAlreadyActivated: true),
     );
     _messaging = messaging;
+    _permissionSubscription = messaging.permissionChanges.listen((_) {
+      unawaited(_serial(_syncPushDevice).catchError(_diagnose));
+    });
     try {
       await messaging.initialize(
         appMetricaApiKey: appMetricaConfig.apiKey,
@@ -545,6 +550,8 @@ final class PocketMfo with WidgetsBindingObserver {
       await _syncPushDevice();
       if (_disposed) await messaging.dispose();
     } catch (error, stack) {
+      await _permissionSubscription?.cancel();
+      _permissionSubscription = null;
       await messaging.dispose();
       if (identical(_messaging, messaging)) _messaging = null;
       _resolver?.dispose();
@@ -563,6 +570,7 @@ final class PocketMfo with WidgetsBindingObserver {
     try {
       final permission = await messaging.getPermission();
       await devices.sync(
+        notificationPermission: permission,
         enabled:
             permission == NotificationPermission.authorized ||
             permission == NotificationPermission.provisional,
@@ -590,6 +598,7 @@ final class PocketMfo with WidgetsBindingObserver {
     _experiments = null;
     WidgetsBinding.instance.removeObserver(this);
     await _authSubscription?.cancel();
+    await _permissionSubscription?.cancel();
     _resolver?.dispose();
     _pushDevices?.dispose();
     // Pending HTTP calls may finish later; _alive/epoch guards prevent them

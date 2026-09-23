@@ -24,7 +24,7 @@ func TestAllUsersSelectionAndLimits(t *testing.T) {
 	}
 	check(2, 2)
 	// One user may own multiple devices; all means all enabled devices by default.
-	extra := DeviceInput{ID: "device000000003", DeviceID: "333", Secret: secret(), Platform: "android", Enabled: true}
+	extra := DeviceInput{ID: "device000000003", DeviceID: "333", Secret: secret(), Platform: "android", Enabled: true, NotificationPermission: "authorized"}
 	_, err = x.p.RegisterDevice(x.app, x.user, extra)
 	must(t, err)
 	check(2, 3)
@@ -75,7 +75,7 @@ func TestAllUsersOnlyConnectedCollectionsAndExistingOwners(t *testing.T) {
 		user.SetPassword("password-12345")
 		must(t, x.app.Save(user))
 		x.p.options.AuthCollections = append(x.p.options.AuthCollections, name)
-		_, err := x.p.RegisterDevice(x.app, user, DeviceInput{ID: deviceID, DeviceID: strings.TrimPrefix(deviceID, "device"), Secret: secret(), Platform: "ios", Enabled: true})
+		_, err := x.p.RegisterDevice(x.app, user, DeviceInput{ID: deviceID, DeviceID: strings.TrimPrefix(deviceID, "device"), Secret: secret(), Platform: "ios", Enabled: true, NotificationPermission: "authorized"})
 		must(t, err)
 	}
 	addUser("connected", "device000000003")
@@ -126,7 +126,7 @@ func TestAllUsersRequiresExplicitChoiceAndScheduledSnapshot(t *testing.T) {
 	_, err = x.p.SaveCampaign(x.app, c)
 	must(t, err)
 	// A device registered after scheduling is included when the frozen all-users run starts.
-	_, err = x.p.RegisterDevice(x.app, x.user, DeviceInput{ID: "device000000003", DeviceID: "333", Secret: secret(), Platform: "android", Enabled: true})
+	_, err = x.p.RegisterDevice(x.app, x.user, DeviceInput{ID: "device000000003", DeviceID: "333", Secret: secret(), Platform: "android", Enabled: true, NotificationPermission: "authorized"})
 	must(t, err)
 	r, err := x.app.FindRecordById(RunsCollection, run["id"].(string))
 	must(t, err)

@@ -166,7 +166,7 @@ func (p *Plugin) state(app core.App) (map[string]any, error) {
 	}
 	dd := []any{}
 	for _, d := range devices {
-		dd = append(dd, map[string]any{"id": d.Id, "userId": d.GetString("userId"), "platform": d.GetString("platform"), "language": d.GetString("language"), "appVersion": d.GetString("appVersion"), "enabled": d.GetBool("enabled"), "lastSeen": d.GetString("lastSeen")})
+		dd = append(dd, map[string]any{"id": d.Id, "userId": d.GetString("userId"), "platform": d.GetString("platform"), "language": d.GetString("language"), "appVersion": d.GetString("appVersion"), "enabled": d.GetBool("enabled"), "notificationPermission": d.GetString("notificationPermission"), "lastSeen": d.GetString("lastSeen")})
 	}
 	return map[string]any{"config": c, "configLocks": settingsLocks(app), "oauthClientId": p.options.OAuthClientID, "audiences": a, "campaigns": campaigns, "runs": runs, "devices": dd, "fields": p.AudienceFields(app), "authCollections": p.options.AuthCollections}, nil
 }
@@ -234,7 +234,7 @@ func (p *Plugin) call(ctx context.Context, app core.App, action string, args jso
 			return nil, err
 		}
 		return p.Runs(app)
-	case "report", "cancel":
+	case "report", "refresh_report", "cancel":
 		var in struct {
 			RunID string `json:"runId"`
 		}
@@ -243,6 +243,9 @@ func (p *Plugin) call(ctx context.Context, app core.App, action string, args jso
 		}
 		if action == "report" {
 			return p.Report(app, in.RunID)
+		}
+		if action == "refresh_report" {
+			return p.RefreshReport(ctx, app, in.RunID)
 		}
 		err := p.Cancel(app, in.RunID)
 		return map[string]any{"cancelled": err == nil}, err
@@ -276,6 +279,7 @@ func (p *Plugin) MCPTools() []mcp.Tool {
 		{"test", "Отправить только на явно выбранные тестовые устройства", test, false, true},
 		{"runs", "Последние 100 запусков", mcp.Object(map[string]any{}), true, true},
 		{"report", "Статус, открытия через приложение, бизнес-конверсии и AppMetrica group ID", mcp.Object(map[string]any{"runId": str}, "runId"), true, true},
+		{"refresh_report", "Восстановить причины старых неудачных отправок из AppMetrica (до 20 пакетов). Только запрос статуса, без повторной отправки", mcp.Object(map[string]any{"runId": str}, "runId"), false, true},
 		{"cancel", "Отменить запуск до наступления расписания", mcp.Object(map[string]any{"runId": str}, "runId"), false, true},
 	} {
 		result = append(result, mcp.Tool{Name: "push_" + item.name, Description: item.description, InputSchema: item.schema, ReadOnly: item.readOnly, Idempotent: item.idempotent, Handle: func(ctx context.Context, call mcp.Call) (any, error) {

@@ -122,10 +122,10 @@ func setup(t *testing.T, locked bool) *fixture {
 	must(t, err)
 	_, err = Configure(x.app, Config{ApplicationID: 123, OAuthToken: "server-only-token", SendRate: 1000})
 	must(t, err)
-	x.device = DeviceInput{ID: "device000000001", DeviceID: "12345678901234567890", Secret: secret(), Platform: "android", Language: "ru", AppVersion: "1.0", Enabled: true}
+	x.device = DeviceInput{ID: "device000000001", DeviceID: "12345678901234567890", Secret: secret(), Platform: "android", Language: "ru", AppVersion: "1.0", Enabled: true, NotificationPermission: "authorized"}
 	_, err = x.p.RegisterDevice(x.app, x.user, x.device)
 	must(t, err)
-	x.otherDevice = DeviceInput{ID: "device000000002", DeviceID: "999", Secret: secret(), Platform: "ios", Language: "en", Enabled: true}
+	x.otherDevice = DeviceInput{ID: "device000000002", DeviceID: "999", Secret: secret(), Platform: "ios", Language: "en", Enabled: true, NotificationPermission: "authorized"}
 	_, err = x.p.RegisterDevice(x.app, x.other, x.otherDevice)
 	must(t, err)
 	return x

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:app_messaging_flutter/app_messaging_flutter.dart';
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -74,6 +75,8 @@ final class PushDevices {
   Future<void> sync({
     required bool enabled,
     required String language,
+    NotificationPermission notificationPermission =
+        NotificationPermission.notDetermined,
     String appVersion = '',
     String? platform,
   }) {
@@ -102,6 +105,7 @@ final class PushDevices {
           'language': language,
           'appVersion': appVersion,
           'enabled': enabled,
+          'notificationPermission': notificationPermission.name,
         },
       );
     });

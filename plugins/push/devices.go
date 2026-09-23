@@ -14,13 +14,20 @@ import (
 )
 
 type DeviceInput struct {
-	ID         string `json:"id,omitempty"`
-	Secret     string `json:"secret"`
-	DeviceID   string `json:"deviceId"`
-	Platform   string `json:"platform"`
-	Language   string `json:"language"`
-	AppVersion string `json:"appVersion"`
-	Enabled    bool   `json:"enabled"`
+	ID                     string `json:"id,omitempty"`
+	Secret                 string `json:"secret"`
+	DeviceID               string `json:"deviceId"`
+	Platform               string `json:"platform"`
+	Language               string `json:"language"`
+	AppVersion             string `json:"appVersion"`
+	Enabled                bool   `json:"enabled"`
+	NotificationPermission string `json:"notificationPermission"`
+}
+
+var notificationPermissions = []string{"unknown", "notDetermined", "denied", "deniedPermanently", "authorized", "provisional"}
+
+func eligibleDevice(alias string) string {
+	return alias + ".enabled=1 AND " + alias + ".notificationPermission IN ('authorized','provisional')"
 }
 
 var deviceIDPattern = regexp.MustCompile(`^[0-9]{1,20}$`)
@@ -30,6 +37,12 @@ var recordIDPattern = regexp.MustCompile(`^[a-z0-9]{15}$`)
 func (p *Plugin) RegisterDevice(app core.App, user *core.Record, in DeviceInput) (string, error) {
 	if !p.allowedUser(user) {
 		return "", textError("требуется пользователь подключённой auth-коллекции")
+	}
+	if in.NotificationPermission == "" {
+		in.NotificationPermission = "unknown"
+	}
+	if !slices.Contains(notificationPermissions, in.NotificationPermission) {
+		return "", textError("некорректный статус разрешения уведомлений")
 	}
 	if !secretPattern.MatchString(in.Secret) || !deviceIDPattern.MatchString(in.DeviceID) || !slices.Contains([]string{"android", "ios"}, in.Platform) || len(in.Language) > 32 || len(in.AppVersion) > 64 {
 		return "", textError("некорректные данные устройства")
@@ -52,7 +65,7 @@ func (p *Plugin) RegisterDevice(app core.App, user *core.Record, in DeviceInput)
 				return textError("устройство недоступно")
 			}
 		}
-		if r.GetString("userId") != user.Id || r.GetString("authCollection") != user.Collection().Id || r.GetBool("enabled") != in.Enabled || r.GetString("deviceId") != in.DeviceID {
+		if r.GetString("userId") != user.Id || r.GetString("authCollection") != user.Collection().Id || r.GetBool("enabled") != in.Enabled || r.GetString("deviceId") != in.DeviceID || r.GetString("notificationPermission") != in.NotificationPermission {
 			r.Set("generation", secret())
 		}
 		r.Set("deviceId", in.DeviceID)
@@ -62,6 +75,7 @@ func (p *Plugin) RegisterDevice(app core.App, user *core.Record, in DeviceInput)
 		r.Set("language", in.Language)
 		r.Set("appVersion", in.AppVersion)
 		r.Set("enabled", in.Enabled)
+		r.Set("notificationPermission", in.NotificationPermission)
 		r.Set("secretHash", hash(in.Secret))
 		r.Set("lastSeen", types.NowDateTime())
 		if err = save(tx, r); err != nil {

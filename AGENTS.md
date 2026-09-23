@@ -46,6 +46,8 @@ npm run test:docker
 
 Go-файлы форматируйте `gofmt`. При ограниченном доступе к стандартному кэшу можно задать `GOCACHE=/tmp/pocket-mfo-go-cache`. API-тесты realtime и браузерные тесты слушают локальные порты. Docker smoke создаёт и удаляет только собственный временный Compose project. Не очищайте пользовательский `pb_data` или volume example.
 
+Перед публикацией выполните также полный Dart/Flutter-набор, `test:repository`, `test:integration`, `test:partner` и web smoke из [CONTRIBUTING.md](CONTRIBUTING.md). Компиляция примеров руководства проверяет контракт, но не подтверждает работу внешних служб.
+
 Для изменения поведения добавляйте регрессионную проверку на наблюдаемый результат. Для отказов проверяйте отсутствие побочных изменений, для прав доступа — запросы обычного пользователя и суперпользователя, для транзакций — откат. UI проверяйте в светлой и тёмной темах.
 
 ## Публикация
@@ -55,3 +57,17 @@ Go-файлы форматируйте `gofmt`. При ограниченном 
 Учётные данные из `example/migrations` — открытые демонстрационные данные. Не подключайте эти миграции к production. Базы, бэкапы, `.env`, токены и пользовательские данные не должны попадать в Git.
 
 Dart/Flutter: используйте FVM из `.fvmrc`, корневой pub workspace и единый lockfile. Пример находится в `examples/partner_links_app`, Go-стенд — в `example`.
+
+
+Перед изменением Flutter-пакетов прочитайте их инструкции:
+
+| Пакет | Инструкции |
+| --- | --- |
+| `pocket_mfo_flutter` | [AGENTS.md](packages/pocket_mfo_flutter/AGENTS.md) |
+| `dynamic_link` | [AGENTS.md](packages/dynamic_link/AGENTS.md) |
+| `dynamic_link_flutter` | [AGENTS.md](packages/dynamic_link_flutter/AGENTS.md) |
+| `partner_links_flutter` | [AGENTS.md](packages/partner_links_flutter/AGENTS.md) |
+| `app_messaging_flutter` | [AGENTS.md](packages/app_messaging_flutter/AGENTS.md) |
+| `push_links_flutter` | [AGENTS.md](packages/push_links_flutter/AGENTS.md) |
+
+Для независимых тестов дизайна, офферов, порядка и переходов обязательный контракт — [воронки экспериментов](docs/EXPERIMENT_FUNNELS.md). Передавайте контексты реально показанных конфигураций; успешная загрузка не считается показом.

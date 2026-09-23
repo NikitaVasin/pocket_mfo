@@ -1,10 +1,10 @@
 # Публикация и подключение
 
-Репозиторий: [NikitaVasin/pocket_mfo](https://github.com/NikitaVasin/pocket_mfo). Один Go-модуль `github.com/NikitaVasin/pocket_mfo` содержит четыре пакета плагинов. У них общая версия; отдельные go.mod внутри plugins не нужны. `.git` используется в Git URL, но не в module path или Go-импортах.
+Репозиторий: [NikitaVasin/pocket_mfo](https://github.com/NikitaVasin/pocket_mfo). Один Go-модуль `github.com/NikitaVasin/pocket_mfo` содержит десять пакетов плагинов. У них общая версия; отдельные go.mod внутри plugins не нужны. `.git` используется в Git URL, но не в module path или Go-импортах.
 
 ## Подготовка первого выпуска
 
-1. Выполните проверки из [CONTRIBUTING.md](../CONTRIBUTING.md). Просмотрите `git status` и diff; не включайте базы, бэкапы и пользовательские секреты. Example содержит только намеренно опубликованные демопароли.
+1. Прочитайте [актуальный отчёт готовности](RELEASE_READINESS_2026-09-23.md) и выполните проверки из [CONTRIBUTING.md](../CONTRIBUTING.md). Просмотрите `git status` и diff; не включайте базы, бэкапы и пользовательские секреты. Example содержит только намеренно опубликованные демопароли.
 2. Если remote ещё не настроен, добавьте `origin` с адресом `https://github.com/NikitaVasin/pocket_mfo.git` или `git@github.com:NikitaVasin/pocket_mfo.git`. Перед отправкой проверьте `git remote -v` и существующую историю удалённой ветки. Не перезаписывайте её через force push.
 3. Отправьте согласованный коммит и дождитесь GitHub Actions. Workflow выполняет проверки, но ничего не публикует и не создаёт теги автоматически.
 4. Выберите версию первого выпуска и создайте обычный SemVer-тег `v0.x.y` на проверенном коммите. После тега подключайте потребителей к этой версии. До первого тега Go поддерживает получение по commit и `@latest`.
@@ -29,7 +29,7 @@ import "github.com/NikitaVasin/pocket_mfo/plugins/schemalock"
 schemalock.Register(app)
 ```
 
-Остальные пакеты: `plugins/polymorphicrelation`, `plugins/variants`, `plugins/singleton`. Их Register вызываются отдельно; Schema Lock не устанавливает автоматически Variants. Не импортируйте `example/migrations` в рабочее приложение: это демонстрационные данные и учётные записи.
+Полный список десяти плагинов, зависимости и порядок регистрации — в [руководстве интеграции](AI_INTEGRATION.md#5-интеграция-go-сервера). Каждый плагин регистрируется отдельно; Schema Lock не подключает остальные автоматически. Не импортируйте `example/migrations` в рабочее приложение: это демонстрационные данные и учётные записи.
 
 Для соседнего локального checkout:
 
@@ -40,6 +40,20 @@ replace github.com/NikitaVasin/pocket_mfo => ../pocket_mfo
 ```
 
 Это фрагмент go.mod потребителя. Перед обычной сборкой из GitHub уберите локальный replace и выберите опубликованную версию.
+
+## Dart/Flutter-пакеты
+
+Шесть пакетов `packages/*` используют соседние path-зависимости и `publish_to: none`; публикация Go-модуля не публикует их на pub.dev. Подключайте полный checkout репозитория на выбранном commit (например, как Git submodule в `vendor/pocket_mfo`) и зависимость приложения:
+
+```yaml
+dependencies:
+  pocket_mfo_flutter:
+    path: vendor/pocket_mfo/packages/pocket_mfo_flutter
+```
+
+Путь отсчитывается от pubspec приложения. Если приложение напрямую импортирует нижний пакет, добавьте и его явную path-зависимость из того же checkout. Сохраните соседние каталоги `packages`; не переносите отдельный пакет. В CI потребителя должен быть загружен submodule (`submodules: recursive` в checkout), а commit submodule и lockfile приложения — зафиксированы. SDK берите из `.fvmrc`, запустите `fvm flutter pub get` и проверки целевого приложения. Конфигурации Firebase и AppMetrica из example не копируйте.
+
+`npm run test:integration` проверяет Go-регистрацию и Dart-фасад непосредственно из руководства в отдельных временных проектах-потребителях. Эта проверка не обращается к живым кабинетам AppMetrica.
 
 ## Если репозиторий станет приватным
 

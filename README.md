@@ -103,6 +103,7 @@ UI встроен в Go-бинарник через `embed.FS`; отдельна
 | --- | --- |
 | [Polymorphic Relation](plugins/polymorphicrelation/README.md) | [AGENTS.md](plugins/polymorphicrelation/AGENTS.md) |
 | [Variants](plugins/variants/README.md) | [AGENTS.md](plugins/variants/AGENTS.md) |
+| [Typed Config](plugins/typedconfig/README.md) | [AGENTS.md](plugins/typedconfig/AGENTS.md) |
 | [Singleton](plugins/singleton/README.md) | [AGENTS.md](plugins/singleton/AGENTS.md) |
 | [Dynamic Link](plugins/dynamiclink/README.md) | [AGENTS.md](plugins/dynamiclink/AGENTS.md) |
 | [Partner Links](plugins/partnerlinks/README.md) | [AGENTS.md](plugins/partnerlinks/AGENTS.md) |
@@ -114,7 +115,7 @@ UI встроен в Go-бинарник через `embed.FS`; отдельна
 В example коллекция **demo_homepage** показывает Singleton: форму вместо таблицы и шесть наборов контента. Включение Singleton задаётся в миграции; в приложении без Schema Lock также доступен переключатель **Collection settings → Singleton**.
 
 Общие правила разработки — [AGENTS.md](AGENTS.md) и [CONTRIBUTING.md](CONTRIBUTING.md).
-Результаты ревью и выполненные проверки — [docs/REVIEW.md](docs/REVIEW.md).
+Актуальная готовность к публикации — [отчёт](docs/RELEASE_READINESS_2026-09-23.md); история ревью — [docs/REVIEW.md](docs/REVIEW.md).
 
 ## Проверки
 
@@ -162,11 +163,11 @@ Dynamic Link подключается отдельным плагином: `dyna
 ```sh
 fvm flutter analyze
 fvm dart test packages/dynamic_link/test
-fvm flutter test packages/dynamic_link_flutter/test packages/partner_links_flutter/test packages/app_messaging_flutter/test packages/push_links_flutter/test examples/partner_links_app/test
+fvm flutter test packages/pocket_mfo_flutter/test packages/dynamic_link_flutter/test packages/partner_links_flutter/test packages/app_messaging_flutter/test packages/push_links_flutter/test examples/partner_links_app/test
 ```
 
 ## Единый Flutter-пакет
 
-В example также подключены вкладки **Пуши** и **MCP**. MCP доступен по `/api/mcp`; ключ создаётся в админке с отдельными правами на инструменты и коллекции. `push_launch` разрешается отдельно от подготовки кампаний. По умолчанию MCP-контент ограничен `demo_offers`, `partner_links`, `dynamic_link_settings`. Для рассылок нужны OAuth token AppMetrica в серверных настройках и регистрация нативных устройств; сохранение кампании ничего не отправляет. [Подключение MCP и интерфейс провайдера](plugins/mcp/README.md), [кампании и атрибуция](plugins/push/README.md).
+В example также подключены вкладки **Пуши** и **MCP**. MCP доступен по `/api/mcp`; ключ создаётся в админке с отдельными правами на инструменты и коллекции. `push_launch` разрешается отдельно от подготовки кампаний. По умолчанию MCP-контент ограничен `demo_offers`, `partner_links`, `demo_screen_configs`, `dynamic_link_settings`. Для рассылок нужны OAuth token AppMetrica в серверных настройках и регистрация нативных устройств; сохранение кампании ничего не отправляет. [Подключение MCP и интерфейс провайдера](plugins/mcp/README.md), [кампании и атрибуция](plugins/push/README.md).
 
 [pocket_mfo_flutter](packages/pocket_mfo_flutter/README.md) объединяет гостевой/обычный вход, защищённое хранение сессии, AppMetrica с user.id, снимок экспериментов в каждом событии, партнёрские ссылки и опциональные пуши. [Пример](examples/partner_links_app) автоматически входит гостем через `users`. Существующая `demo_members` переименовывается с сохранением ID и записей; заполненная отдельная `users` требует ручного решения конфликта, миграция её не удаляет.

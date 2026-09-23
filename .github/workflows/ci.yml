@@ -27,8 +27,9 @@ jobs:
           fi
       - run: go test -race ./...
       - run: go vet ./...
+      - run: go mod verify
       - name: Check reachable Go vulnerabilities
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+        run: GOTOOLCHAIN="$(go env GOVERSION)" go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - run: go build ./...
 
   browser:
@@ -44,9 +45,11 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - run: npm run test:repository
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
+      - run: npm run test:partner
 
   docker:
     name: Docker smoke
@@ -57,3 +60,40 @@ jobs:
         with:
           node-version: 24
       - run: npm run test:docker
+
+  flutter:
+    name: Flutter and integration contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: .fvmrc
+          channel: stable
+          cache: true
+      - name: Install FVM
+        run: |
+          dart pub global activate fvm 4.0.5
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - run: fvm install
+      - run: fvm flutter pub get --enforce-lockfile
+      - run: fvm flutter analyze --no-pub
+      - run: fvm dart test packages/dynamic_link/test
+      - run: fvm flutter test --no-pub packages/pocket_mfo_flutter/test packages/dynamic_link_flutter/test packages/partner_links_flutter/test packages/app_messaging_flutter/test packages/push_links_flutter/test examples/partner_links_app/test
+      - run: fvm dart analyze plugins/typedconfig/testdata
+      - run: fvm dart run plugins/typedconfig/testdata/smoke.dart
+      - run: npm run test:integration
+      - name: Build web example
+        working-directory: examples/partner_links_app
+        run: fvm flutter build web --no-pub --no-web-resources-cdn
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:flutter

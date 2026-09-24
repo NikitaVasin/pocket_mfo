@@ -30,12 +30,13 @@
 .tc-actions { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--surfaceAlt2Color); }
 .tc-actions > button, .tc-toolbar > button { min-height: 40px; }
 .tc-empty { padding: 24px 16px; text-align: center; color: var(--surfaceTxtHintColor); background: var(--surfaceAlt1Color); border-radius: 8px; }
-.tc-preview { display: flex; flex-direction: column; gap: 8px; max-width: 400px; }
-.tc-preview-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tc-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-preview { display: flex; flex-direction: column; gap: 4px; width: 320px; max-width: 60vw; min-width: 0; line-height: 20px; }
+.tc-preview > strong, .tc-preview > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media(max-width: 480px) {
     .tc-card > summary { padding: 12px; }
     .tc-card-body { padding: 0 12px 12px; }
 }
 
 .tc-actions > button { min-width: 104px; white-space: nowrap; flex: 1 1 104px; }
+
+.tc-editor > .tc-search { margin: 0 0 16px; }

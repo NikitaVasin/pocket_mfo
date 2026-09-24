@@ -12,6 +12,8 @@ import 'package:http/testing.dart';
 import 'package:pocket_mfo_flutter/pocket_mfo_flutter.dart';
 import 'package:pocketbase/pocketbase.dart';
 
+import 'failing_session_storage.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = BasicMessageChannel<Object?>(
@@ -150,6 +152,47 @@ void main() {
     expect(requests[1].containsKey('userId'), false);
     devices.dispose();
   });
+
+  for (final operation in ['read', 'write']) {
+    test('push registration recovers after storage $operation fails', () async {
+      final storage = FailingSessionStorage();
+      if (operation == 'read') {
+        storage.readFailures = 2;
+      } else {
+        storage.writeFailures = 2;
+      }
+      final requests = <Map<String, dynamic>>[];
+      final pb = PocketBase(
+        'https://pb.example',
+        httpClientFactory: () => MockClient((request) async {
+          requests.add(jsonDecode(request.body) as Map<String, dynamic>);
+          return http.Response('{}', 200);
+        }),
+      );
+      pb.authStore.save('token', RecordModel({'id': 'user00000000001'}));
+      PushDevices createDevices() => PushDevices(
+        pocketBase: pb,
+        storage: storage,
+        deviceId: () async => '42',
+      );
+      var devices = createDevices();
+      addTearDown(() => devices.dispose());
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await expectLater(
+          devices.sync(enabled: true, language: 'ru'),
+          throwsStateError,
+        );
+        expect(requests, isEmpty);
+      }
+      await devices.sync(enabled: true, language: 'ru');
+      devices.dispose();
+      devices = createDevices();
+      await devices.sync(enabled: true, language: 'ru');
+      expect(requests, hasLength(2));
+      expect(requests[1]['id'], requests[0]['id']);
+      expect(requests[1]['secret'], requests[0]['secret']);
+    });
+  }
 
   test('late device ID cannot bind the previous account', () async {
     final ready = Completer<String?>();

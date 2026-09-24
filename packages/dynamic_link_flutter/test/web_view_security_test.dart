@@ -46,6 +46,27 @@ void main() {
   }
 
   for (final brightness in Brightness.values) {
+    for (final saveCookies in [false, true]) {
+      testWidgets(
+        'custom User-Agent is independent of cookies: $brightness/$saveCookies',
+        (tester) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ThemeData(brightness: brightness),
+              home: DynamicLinkWebView(
+                uri: Uri.parse('https://example.com'),
+                saveCooke: saveCookies,
+                changeClient: true,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(platform.controller.userAgent, isNotNull);
+          expect(platform.controller.loads, [Uri.parse('https://example.com')]);
+          debugDefaultTargetPlatformOverride = null;
+        },
+      );
+    }
     testWidgets('native cookies are not reconstructed or copied: $brightness', (
       tester,
     ) async {
@@ -124,7 +145,13 @@ class FakeController extends PlatformWebViewController {
     : super.implementation(const PlatformWebViewControllerCreationParams());
   final loads = <Uri>[];
   final scripts = <String>[];
+  String? userAgent;
   Completer<void>? channelReady;
+  @override
+  Future<void> setUserAgent(String? value) async {
+    userAgent = value;
+  }
+
   @override
   Future<void> setJavaScriptMode(JavaScriptMode mode) async {}
   @override

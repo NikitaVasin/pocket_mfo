@@ -22,6 +22,7 @@ Map<String, dynamic> response({String mode = 'appView'}) => {
     'skipWarningDialog': false,
     'title': 'Offer',
     'trackName': 'partner',
+    'category': 'offers',
   },
 };
 
@@ -58,6 +59,7 @@ void main() {
     expect(result.link.warningDialog?.content, 'Partner site');
     expect(result.link.title, 'Offer');
     expect(result.link.trackName, 'partner');
+    expect(result.link.category, 'offers');
   });
 
   test('rejects invalid URLs, flags, modes and expiry', () {

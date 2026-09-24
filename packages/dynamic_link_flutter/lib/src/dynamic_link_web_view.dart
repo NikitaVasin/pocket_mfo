@@ -132,7 +132,7 @@ final class _DynamicLinkWebViewState() extends State<DynamicLinkWebView> {
       );
     await configureAndroidFilePicker(controller);
     if (!_active) return;
-    if (widget.saveCooke && widget.changeClient) {
+    if (widget.changeClient) {
       await controller.setUserAgent('Chrome/99.9.9999.9 Mobile Safari/999.9');
       if (!_active) return;
     }

@@ -22,7 +22,7 @@ func TestManagedSettings(t *testing.T) {
 		EventNames: map[string]string{"lead": "code_lead"},
 		Providers:  []Provider{RafinadNew("rafinad", "code-partner-secret-123")},
 	}
-	x := setupOptions(t, true, false, Options{Managed: m})
+	x := setupOptions(t, false, false, Options{Managed: m})
 	*m.ApplicationID = 0
 	m.EventNames["lead"] = "changed"
 	m.Providers[0].Statuses["1"] = "rejected"
@@ -137,17 +137,26 @@ func TestRemovingManagedRestoresStoredSettings(t *testing.T) {
 }
 
 func TestAdminConfigLock(t *testing.T) {
-	for _, schemaLock := range []bool{false, true} {
-		t.Run(fmt.Sprint(schemaLock), func(t *testing.T) {
-			x := setupOptions(t, schemaLock, false, Options{LockAdminConfig: true})
+	for _, locks := range []struct{ schema, explicit bool }{{false, true}, {true, false}, {true, true}} {
+		t.Run(fmt.Sprint(locks), func(t *testing.T) {
+			x := setupOptions(t, locks.schema, false, Options{LockAdminConfig: locks.explicit})
 			w := x.request("GET", "/api/partnerlinks/admin/config", x.admin, "", "")
 			var c adminConfig
 			must(t, json.Unmarshal(w.Body.Bytes(), &c))
 			if w.Code != 200 || !c.Locks.All {
 				t.Fatal("read-only config unavailable")
 			}
+			if locks.schema {
+				for _, method := range []string{"POST", "PATCH", "DELETE"} {
+					if w := x.request(method, "/api/partnerlinks/admin/config", x.admin, "{}", "application/json"); w.Code != 403 {
+						t.Fatalf("schemalock permitted adjacent method %s", method)
+					}
+				}
+			}
 			c.Locks.All = false
 			c.BaseURL = "https://cannot-save.example"
+			c.ApplicationID++
+			c.Providers[0].Name = "Must not change"
 			b, _ := json.Marshal(c)
 			for _, auth := range []string{"", x.auth, x.admin} {
 				w = x.request("PUT", "/api/partnerlinks/admin/config", auth, string(b), "application/json")
@@ -157,7 +166,7 @@ func TestAdminConfigLock(t *testing.T) {
 			}
 			before, err := Load(x.app)
 			must(t, err)
-			if before.Version != x.config.Version || before.BaseURL != x.config.BaseURL {
+			if !reflect.DeepEqual(before, x.config) {
 				t.Fatal("blocked write changed settings")
 			}
 			before.BaseURL = "https://trusted-code.example"

@@ -38,6 +38,11 @@ func (p *Plugin) Launch(app core.App, in Launch) (map[string]any, error) {
 	if len(in.TestDeviceIDs) > 20 {
 		return nil, textError("не более 20 тестовых устройств")
 	}
+	for _, id := range in.TestDeviceIDs {
+		if len(id) != 15 {
+			return nil, textError("некорректный ID тестового устройства")
+		}
+	}
 	when := time.Now().UTC()
 	if in.ScheduledAt != "" {
 		var err error
@@ -182,6 +187,7 @@ func (p *Plugin) Process(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var failures []error
 	for _, run := range runs {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -200,8 +206,14 @@ func (p *Plugin) Process(ctx context.Context) error {
 			}
 			return p.prepare(tx, r, d)
 		})
+		var invalid inputError
+		if errors.As(err, &invalid) {
+			// prepare rolled back, including partial jobs and cooldown changes.
+			// An invalid snapshot cannot recover by retrying on every cron tick.
+			err = p.failScheduledRun(run.Id, invalid.Error())
+		}
 		if err != nil {
-			return err
+			failures = append(failures, err)
 		}
 	}
 	jobs, err := p.app.FindRecordsByFilter(jobsCollection, "(status='queued'||status='unknown'||status='submitted') && (nextAttempt=''||nextAttempt<={:now})", "nextAttempt,created", 10, 0, dbx.Params{"now": types.NowDateTime()})
@@ -213,10 +225,25 @@ func (p *Plugin) Process(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if err = p.processJob(ctx, job.Id); err != nil {
-			return err
+			failures = append(failures, err)
 		}
 	}
-	return nil
+	return errors.Join(failures...)
+}
+
+func (p *Plugin) failScheduledRun(id, message string) error {
+	return p.app.RunInTransaction(func(tx core.App) error {
+		run, err := tx.FindRecordById(RunsCollection, id)
+		if err != nil {
+			return err
+		}
+		if run.GetString("status") != "scheduled" {
+			return nil
+		}
+		run.Set("status", "failed")
+		run.Set("error", message)
+		return save(tx, run)
+	})
 }
 func (p *Plugin) processJob(ctx context.Context, id string) error {
 	job, err := p.app.FindRecordById(jobsCollection, id)

@@ -283,18 +283,17 @@ final class PocketMfo with WidgetsBindingObserver {
   }
 
   Future<void> _guestAuth() async {
-    if (_guest == null) {
-      _guest = {
-        'id': _random(15, 'abcdefghijklmnopqrstuvwxyz0123456789'),
-        'password': _random(
-          48,
-          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_',
-        ),
-        'registered': false,
-      };
-      // Save BEFORE any network operation. A lost response must reuse credentials.
-      await _persist();
-    }
+    _guest ??= {
+      'id': _random(15, 'abcdefghijklmnopqrstuvwxyz0123456789'),
+      'password': _random(
+        48,
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_',
+      ),
+      'registered': false,
+    };
+    // Retry persistence too: an earlier write may have failed after creating
+    // the in-memory credentials. Never authenticate an unpersisted guest.
+    await _persist();
     final guest = _guest!;
     final id = guest['id'] as String;
     final password = guest['password'] as String;

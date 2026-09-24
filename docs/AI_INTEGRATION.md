@@ -252,7 +252,7 @@ func Register(app core.App, c IntegrationConfig) *mcp.Server {
 
 ### Закрепление настроек и миграции
 
-`Managed` фиксирует ненулевые указатели, включая пустую строку/0. У Partner Links отдельно фиксируются переданные EventNames и каждый Provider целиком по ID; неуказанные настройки остаются редактируемыми. `LockAdminConfig` запрещает HTTP-изменение всей конфигурации даже суперпользователю. Контент `partner_links`, аудитории и кампании от этого не становятся неизменяемыми.
+`Managed` фиксирует ненулевые указатели, включая пустую строку/0. У Partner Links отдельно фиксируются переданные EventNames и каждый Provider целиком по ID; неуказанные настройки остаются редактируемыми. `LockAdminConfig` запрещает HTTP-изменение всей конфигурации даже суперпользователю. Для Partner Links подключение Schema Lock автоматически включает тот же запрет для AppMetrica и провайдеров. Контент `partner_links`, аудитории и кампании от этого не становятся неизменяемыми.
 
 Закреплённые секреты действуют из памяти процесса и не сохраняются как секреты конфигурации в БД. Удаление закрепления может снова активировать старое значение из БД. При ротации продумай это явно. Удаление Provider из кода может сломать использующие его ссылки. Push сохраняет привязку Application ID и не даёт сменить приложение при существующих устройствах/незавершённых запусках: не обходи отказ удалением служебных строк.
 
@@ -309,12 +309,12 @@ func Register(app core.App, c IntegrationConfig) *mcp.Server {
 Явно вызови `dynamiclink.Register(app)`, в том числе при Partner Links. Поле создаётся как `&dynamiclink.Field{JSONField: core.JSONField{Name: "destination"}}`. Значение — HTTP(S) URL без credentials и параметры открытия, максимум 16384 байта; неизвестные ключи/неверные типы отклоняются.
 
 ```json
-{"url":"https://partner.example/offer","mode":"appView","saveCooke":true,"showLoader":true,"changeClient":false,"openUrlsInBrowser":false,"skipWarningDialog":false}
+{"url":"https://partner.example/offer","mode":"browser","saveCooke":true,"showLoader":true,"changeClient":false,"openUrlsInBrowser":false,"skipWarningDialog":false}
 ```
 
 Достаточно `url`, остальные значения имеют defaults выше. `mode`: `appView` — WebView, `view` — браузер ОС внутри приложения, `browser` — внешний браузер. Дополнительно `title`, `trackName`, `warningDialog:{title,content}`. Сохрани точное имя **`saveCooke`**; явные `false` не заменяй defaults. Поле само ничего не открывает и не отправляет события.
 
-Общая политика: зарегистрируй Variants/Singleton, после auth-коллекции вызови `dynamiclink.Configure(app, "users")`. Создастся `dynamic_link_settings` с Default и singleton на каждый набор. Поля: `mode` (пусто = настройки ссылки), `warningPolicy` (`inherit/disabled/replace`), `warningTitle`, `warningContent`. Для replace оба текста обязательны; он действует и при `skipWarningDialog` самой ссылки.
+Общая политика: зарегистрируй Variants/Singleton, после auth-коллекции вызови `dynamiclink.Configure(app, "users")`. Создастся `dynamic_link_settings` с Default и singleton на каждый набор. Поля: `mode` (пусто = внешний браузер), `warningPolicy` (`inherit/disabled` — без предупреждения, `replace` — общее предупреждение), `warningTitle`, `warningContent`, `openingOptions` и `categories`. Категория `{key,label,options}` переопределяет общий режим, cookies, User-Agent, загрузку и предупреждение. Для replace оба текста обязательны. В самой ссылке указываются URL, необязательные category и title; индивидуальные параметры открытия игнорируются при применении общей политики. Настройки доступны через Dynamic Link в верхней панели.
 
 Политика применяется для выбранной auth-коллекции к Records API/expand/realtime и resolve; исходная БД не меняется. Неавторизованные и суперпользователь получают исходные значения. В собственном endpoint используй `dynamiclink.Apply(app, user, value)`. После смены условий перезагрузи ссылки. Общая политика рассчитана на одну auth-коллекцию.
 
@@ -346,7 +346,7 @@ func Register(app core.App, c IntegrationConfig) *mcp.Server {
 
 **Хранение.** `conversations` обязательна, системная, пользователь читает свои записи, администратор — все; HTTP-запись запрещена даже superuser независимо от Schema Lock. Не используй её как MCP-контент или обычную редактируемую таблицу заказов. Pending по умолчанию 14 дней от выдачи, остальные статусы бессрочно; 0 означает бессрочно, максимум 36500 дней. Срок завершённых отсчитывается от фактического изменения статуса, повтор не продлевает. Очистка ежечасная, логическое истечение действует до неё; после удаления поздний постбек не восстановит заказ. Удаление пользователя удаляет его конверсии.
 
-`GET|PUT /api/partnerlinks/admin/config` требует superuser; optimistic version обязательна. Post API key скрыт в ответе, **секреты Provider доступны суперпользователю**; не выводи такой ответ в лог. `pl_config` закрыта для Records/realtime. Прежние AES-настройки `PL_KEYS`, `ActiveKeyID`, `CollectConversations`, `OptionsFromEnv` не относятся к текущему API; миграцию старой интеграции изучи отдельно в README.
+`GET|PUT /api/partnerlinks/admin/config` требует superuser; optimistic version обязательна. При Schema Lock PUT запрещён: используй доверенный Go-код и `partnerlinks.Configure`. Post API key скрыт в ответе, **секреты Provider доступны суперпользователю**; не выводи такой ответ в лог. `pl_config` закрыта для Records/realtime. Прежние AES-настройки `PL_KEYS`, `ActiveKeyID`, `CollectConversations`, `OptionsFromEnv` не относятся к текущему API; миграцию старой интеграции изучи отдельно в README.
 
 ### 6.6. Push
 
@@ -663,7 +663,7 @@ npm run test:flutter
 | Контент пустой | Исходные List/View rules, другая auth-коллекция, первый совпавший вариант, пустой выбранный content_set; Default не наследуется |
 | MCP не подключается | Streamable HTTP POST, полный URL, Bearer MCP key, срок/владелец, Origin, reverse proxy; GET 405 ожидаем |
 | 403 на своём endpoint | Точный метод/шаблон в Schema Lock, затем собственная авторизация; не отключать защиту |
-| Настройки нельзя изменить | Managed/LockAdminConfig: менять источник в Go/секретах и рестартовать; не писать системную запись напрямую |
+| Настройки нельзя изменить | Managed/LockAdminConfig либо Schema Lock для Partner Links: менять источник в Go/секретах и рестартовать; не писать системную запись напрямую |
 
 ## 10. Передача результата пользователю
 

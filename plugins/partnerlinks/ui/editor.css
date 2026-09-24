@@ -31,6 +31,9 @@ select option:disabled, select optgroup:disabled, select optgroup:disabled optio
 .pl-settings .pl-control > input, .pl-settings .pl-control > select { display: block; box-sizing: border-box; width: 100%; max-width: 100%; height: 44px; min-height: 44px; padding: 10px 12px; line-height: 24px; }
 .pl-settings .pl-control:focus-within { outline: 2px solid var(--primaryColor); outline-offset: 2px; }
 .pl-settings .pl-control > select { cursor: pointer; }
+.pl-settings .pl-control > .select { min-width: 0; width: 100%; min-height: 44px; padding: 0; }
+.pl-settings .pl-control .selected-container { min-height: 44px; }
+.pl-settings .pl-control .selected-item { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .pl-retention-help { margin-top: 16px; }
 .pl-mapping-list { display: flex; flex-direction: column; gap: 16px; }
 .pl-mapping-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 12px; align-items: start; }
@@ -62,3 +65,19 @@ fieldset.pl-provider-body { min-width: 0; margin: 0; padding: 0; border: 0; }
 .pl-preset-guide li + li { margin-top: 12px; }
 .pl-preset-table { width: 100%; table-layout: fixed; margin-top: 12px; border-collapse: collapse; }
 .pl-preset-table th, .pl-preset-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--surfaceAlt3Color); overflow-wrap: anywhere; }
+
+.pl-links { display: flex; flex-direction: column; gap: 16px; margin-bottom: 32px; }
+.pl-links-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pl-links-heading h2, .pl-links > p, .pl-links > .field { margin: 0; }
+.pl-link-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.pl-link-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; text-align: left; color: var(--surfaceTxtColor); background: var(--surfaceColor); border: 1px solid var(--surfaceAlt2Color); border-radius: 8px; cursor: pointer; font: inherit; }
+.pl-link-card:hover { background: var(--surfaceAlt1Color); }
+.pl-link-card:focus-visible { outline: 2px solid var(--primaryColor); outline-offset: 2px; }
+.pl-link-card > *, .pl-link-card strong { overflow-wrap: anywhere; max-width: 100%; }
+.pl-link-url { font-size: 0.9em; }
+.pl-link-pagination { font-variant-numeric: tabular-nums; }
+
+/* Keep collections available to native record forms and relation pickers. */
+.collections-sidebar .nav-item[title="partner_links"] { display: none !important; }
+
+.pl-tabs { display: flex; gap: 8px; margin-bottom: 24px; }

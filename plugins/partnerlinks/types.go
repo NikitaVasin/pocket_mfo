@@ -24,7 +24,8 @@ type Options struct {
 	VariantCollections []string
 	Managed            *ManagedConfig
 	// LockAdminConfig makes all settings read-only through HTTP, even for
-	// superusers. Trusted Go code can still Configure editable settings.
+	// superusers. Schema Lock automatically enables the same restriction.
+	// Trusted Go code can still Configure editable settings.
 	LockAdminConfig bool
 }
 

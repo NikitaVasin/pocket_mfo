@@ -4,6 +4,8 @@ services:
     build:
       context: ..
       dockerfile: example/Dockerfile
+    # The local demo must load rebuilt admin extensions instead of caching them for 14 days.
+    command: ["serve", "--http=0.0.0.0:8090", "--dir=/pb_data", "--dev"]
     ports:
       - "127.0.0.1:${POCKETBASE_PORT:-8090}:8090"
     environment:

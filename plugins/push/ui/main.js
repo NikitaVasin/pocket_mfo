@@ -1,4 +1,4 @@
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=8" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/push/style.css?v=9" }));
 app.store.headerLinks = [...app.store.headerLinks, { label: "Пуши", href: "#/push", icon: "ri-notification-3-line" }];
 app.routes.superuserOnly("#/push", () => t.div({ className: "page push-shell" }, pushPage()));
 const pushDeviceCollection = collection => collection?.name === "push_devices";
@@ -62,8 +62,9 @@ function pushPage() {
     function changed() { s.dirty = true; s.preview = null; s.launchKey = ""; }
     function field(label, object, key, opts = {}) {
         const id = `push-field-${++nextID}`;
-        const common = { id, disabled: opts.disabled || false, value: () => object[key] ?? "", oninput: e => { object[key] = opts.number ? Number(e.target.value) : e.target.value; if (object === s.campaign.message && key === "action") { object.target = ""; if (object.action === "partner" && !s.linksLoaded) loadLinks(); } if (opts.onchange) opts.onchange(object[key]); changed(); } };
-        const input = opts.choices ? t.select({ ...common, onchange: common.oninput }, ...opts.choices.map(([value, name]) => t.option({ value }, name)))
+        const update = value => { object[key] = opts.number ? Number(value) : value; if (object === s.campaign.message && key === "action") { object.target = ""; if (object.action === "partner" && !s.linksLoaded) loadLinks(); } if (opts.onchange) opts.onchange(object[key]); changed(); };
+        const common = { id, disabled: opts.disabled || false, value: () => object[key] ?? "", oninput: e => update(e.target.value) };
+        const input = opts.choices ? app.components.select({ id, disabled: common.disabled, value: common.value, required: true, options: opts.choices.map(([value, label]) => ({ value, label })), onchange: options => update(options[0]?.value || "") })
             : opts.multiline ? t.textarea({ ...common, rows: 3 }) : t.input({ ...common, type: opts.type || (opts.number ? "number" : "text"), min: opts.min, max: opts.max });
         return t.div({ className: "push-field" }, t.label({ htmlFor: id }, label), t.div({ className: "field" }, input), opts.hint ? t.small({ className: "txt-hint" }, opts.hint) : null);
     }
@@ -83,8 +84,10 @@ function pushPage() {
     }
     function condition(node, parent, index = 0, depth = 0, inConversion = false) {
         const kind = node.kind;
+        const id = `push-condition-${++nextID}`;
         return t.div({ className: "push-condition" },
-            t.div({ className: "push-condition-head field" }, t.select({ ariaLabel: "Тип условия", value: () => node.kind, onchange: e => switchCondition(node, e.target.value, inConversion) }, ...[["field", "Поле"], ["all", "Все условия (И)"], ["any", "Любое условие (ИЛИ)"], ["not", "Исключить (НЕ)"], ["conversion", "Есть заявка"], ["variant", "Назначение Variants"]].filter(([v]) => !inConversion || !["conversion", "variant"].includes(v)).map(([v, label]) => t.option({ value: v }, label))),
+            t.label({ htmlFor: id, className: "push-control-label" }, "Тип условия"),
+            t.div({ className: "push-condition-head field" }, app.components.select({ id, required: true, value: () => node.kind, onchange: options => switchCondition(node, options[0]?.value || "field", inConversion), options: [["field", "Поле"], ["all", "Все условия (И)"], ["any", "Любое условие (ИЛИ)"], ["not", "Исключить (НЕ)"], ["conversion", "Есть заявка"], ["variant", "Назначение Variants"]].filter(([v]) => !inConversion || !["conversion", "variant"].includes(v)).map(([value, label]) => ({ value, label })) }),
                 parent ? t.button({ type: "button", className: "btn sm secondary", ariaLabel: "Удалить условие", onclick: () => { parent.children.splice(index, 1); changed(); } }, "×") : null),
             ["all", "any", "not", "conversion"].includes(kind) ? t.div(null,
                 () => t.div(null, ...(node.children || []).map((child, i) => condition(child, node, i, depth + 1, inConversion || kind === "conversion"))),
@@ -422,10 +425,11 @@ function pushPage() {
                 const metric = s.overviewMetric, section = data.sections[overviewMetrics[metric][1]];
                 const fmt = value => value == null ? "—" : value.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
                 const rate = c => c.totals.sent > 0 && c.totals.opened != null ? fmt(100 * c.totals.opened / c.totals.sent) + "%" : "—";
+                const metricID = `push-metric-${++nextID}`;
                 return t.div(null,
                     t.div({ className: "push-overview-toolbar" },
                         t.div({ className: "push-actions" }, button("← Раньше", () => shiftOverview(-span)), t.strong(null, `${data.dateFrom} — ${data.dateTo}`), button("Позже →", () => shiftOverview(span), false, () => data.dateTo >= utcToday())),
-                        t.label({ className: "push-field" }, "Показатель графика", t.div({ className: "field" }, t.select({ ariaLabel: "Показатель графика", value: () => s.overviewMetric, onchange: e => { s.overviewMetric = e.target.value; } }, ...Object.entries(overviewMetrics).map(([key, [label]]) => t.option({ value: key, selected: key === metric }, label)))))),
+                        t.div({ className: "push-field" }, t.label({ htmlFor: metricID }, "Показатель графика"), t.div({ className: "field" }, app.components.select({ id: metricID, required: true, value: () => s.overviewMetric, onchange: options => s.overviewMetric = options[0]?.value || "revenue", options: Object.entries(overviewMetrics).map(([value, [label]]) => ({ value, label })) })))),
                     !data.campaigns.length ? t.p({ className: "push-empty" }, "На конец этого периода нет кампаний с реальными отправками. Выберите другие даты.") : t.div(null,
                         section?.status === "ready" ? overviewGraph(data, metric) : t.p({ className: "push-analytics-warning", role: "status" }, section?.error || "График недоступен."),
                         t.div({ className: "push-chart-legend", role: "group", ariaLabel: "Кампании на графике" }, ...data.campaigns.map((c, index) => t.button({ type: "button", className: "btn secondary", ariaPressed: !s.hiddenCampaigns.includes(c.id), onclick: () => { s.hiddenCampaigns = s.hiddenCampaigns.includes(c.id) ? s.hiddenCampaigns.filter(id => id !== c.id) : [...s.hiddenCampaigns, c.id]; } }, t.span({ className: "push-chart-key", style: `--campaign-color:${graphColors[index]}` }, String(index + 1)), c.name))),

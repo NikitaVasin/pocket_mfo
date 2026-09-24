@@ -1,6 +1,7 @@
 package dynamiclink
 
 type Value struct {
+	Category          string         `json:"category,omitempty"`
 	URL               string         `json:"url"`
 	Mode              string         `json:"mode"`
 	SaveCooke         bool           `json:"saveCooke"`

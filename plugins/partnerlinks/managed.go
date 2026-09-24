@@ -7,11 +7,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/schemalock"
 	"github.com/pocketbase/pocketbase/core"
 )
 
 const managedStoreKey = "partnerlinks.managed"
 const adminLockStoreKey = "partnerlinks.adminConfigLocked"
+
+func adminConfigLocked(app core.App) bool {
+	return app.Store().Get(adminLockStoreKey) == true || schemalock.Enabled(app)
+}
 
 // Registration owns a detached snapshot, including maps, slices and pointers.
 func setManaged(app core.App, source *ManagedConfig) {
@@ -164,7 +169,7 @@ type adminConfig struct {
 
 func adminSettings(app core.App, c Config) adminConfig {
 	result := adminConfig{Config: redacted(c), Presets: ProviderPresets()}
-	result.Locks.All = app.Store().Get(adminLockStoreKey) == true
+	result.Locks.All = adminConfigLocked(app)
 	if m := managed(app); m != nil {
 		for key := range managedScalars(m) {
 			result.Locks.Fields = append(result.Locks.Fields, key)

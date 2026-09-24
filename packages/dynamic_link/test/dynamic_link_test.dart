@@ -9,6 +9,11 @@ void main() {
     expect(first, second);
   });
 
+  test('category participates in equality', () {
+    expect(_link(category: 'offers'), _link(category: 'offers'));
+    expect(_link(category: 'offers'), isNot(_link(category: 'help')));
+  });
+
   test('opening mode participates in equality', () {
     final first = _link();
     final second = _link(mode: .browser);
@@ -17,7 +22,7 @@ void main() {
   });
 }
 
-DynamicLink _link({DynamicLinkMode mode = .view}) {
+DynamicLink _link({DynamicLinkMode mode = .view, String? category}) {
   return DynamicLink(
     url: Uri.parse('https://example.com'),
     mode: mode,
@@ -32,5 +37,6 @@ DynamicLink _link({DynamicLinkMode mode = .view}) {
     ),
     title: 'Example',
     trackName: 'example_link',
+    category: category,
   );
 }

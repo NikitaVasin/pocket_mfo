@@ -190,9 +190,11 @@ func toolError(message string) *sdk.CallToolResult {
 	return &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: message}}}
 }
 
-// Decode rejects unknown fields and trailing JSON. Tool handlers must also validate values.
+// Decode rejects bodies larger than 1 MiB, unknown fields and trailing JSON.
+// Tool handlers must also validate values.
 func Decode(reader io.Reader, value any) error {
-	d := json.NewDecoder(io.LimitReader(reader, (1<<20)+1))
+	limited := &io.LimitedReader{R: reader, N: (1 << 20) + 1}
+	d := json.NewDecoder(limited)
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
 		return err
@@ -200,6 +202,9 @@ func Decode(reader io.Reader, value any) error {
 	var tail any
 	if err := d.Decode(&tail); err != io.EOF {
 		return fmt.Errorf("ожидался один JSON объект")
+	}
+	if limited.N == 0 {
+		return fmt.Errorf("JSON превышает 1 MiB")
 	}
 	return nil
 }

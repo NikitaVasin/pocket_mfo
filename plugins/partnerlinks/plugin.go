@@ -177,8 +177,8 @@ func register(app core.App, options Options, client *http.Client) {
 			return r.JSON(200, adminSettings(r.App, *c))
 		}).Bind(apis.RequireSuperuserAuth())
 		e.Router.PUT("/api/partnerlinks/admin/config", func(r *core.RequestEvent) error {
-			if r.App.Store().Get(adminLockStoreKey) == true {
-				return r.ForbiddenError("Настройки доступны только для просмотра: LockAdminConfig включён в Go-коде", nil)
+			if adminConfigLocked(r.App) {
+				return r.ForbiddenError("Настройки доступны только для просмотра. Изменения разрешены только из Go-кода.", nil)
 			}
 			var c adminConfig
 			if err := decodeBody(r, &c); err != nil {

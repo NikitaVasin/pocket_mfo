@@ -8,6 +8,8 @@ import 'package:http/testing.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pocket_mfo_flutter/pocket_mfo_flutter.dart';
 
+import 'failing_session_storage.dart';
+
 const token = 'eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjQxMDI0NDQ4MDB9.signature';
 const expired = 'eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjF9.signature';
 Map<String, dynamic> record(String id) => {
@@ -121,7 +123,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Backend backend;
   late Analytics analytics;
-  late MemorySessionStorage storage;
+  late SessionStorage storage;
   late PocketMfo app;
   late PocketBase pb;
   final diagnostics = <Object>[];
@@ -274,6 +276,32 @@ void main() {
       expect(backend.creates, 1);
     },
   );
+
+  test('guest retry persists credentials before any auth request', () async {
+    await app.dispose();
+    final failingStorage = FailingSessionStorage()..writeFailures = 2;
+    storage = failingStorage;
+    app = create(pb);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await expectLater(app.initialize(), throwsStateError);
+      expect(backend.requests, isEmpty);
+    }
+    await app.initialize();
+    final guests = failingStorage.writes
+        .take(3)
+        .map((value) => (jsonDecode(value) as Map)['guest']);
+    expect(guests, hasLength(3));
+    expect(guests.elementAt(0), guests.elementAt(1));
+    expect(guests.elementAt(0), guests.elementAt(2));
+    expect(backend.creates, 1);
+    final id = app.user!.id;
+    await app.dispose();
+    pb = backend.client();
+    app = create(pb);
+    await app.initialize();
+    expect(app.user!.id, id);
+    expect(backend.creates, 1);
+  });
 
   test(
     'lost create response recovers the persisted credentials on retry',

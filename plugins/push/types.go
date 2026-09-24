@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -140,7 +139,12 @@ func secret() string {
 func decodeRecord(r *core.Record, out any) error {
 	return json.Unmarshal([]byte(r.GetString("definition")), out)
 }
-func textError(message string) error { return fmt.Errorf("push: %s", message) }
+
+// inputError distinguishes invalid configuration from retryable storage errors.
+type inputError string
+
+func (e inputError) Error() string   { return "push: " + string(e) }
+func textError(message string) error { return inputError(message) }
 func ident(v string) string          { return `"` + strings.ReplaceAll(v, `"`, `""`) + `"` }
 func literal(v string) string { // SQL strings, never identifiers.
 	result := "'"

@@ -105,7 +105,7 @@ func TestRevenueSelectedStatusAndValidationBeforeSideEffects(t *testing.T) {
 }
 
 func TestRevenueStatusLegacyConfigAndInvalidUpdateRollback(t *testing.T) {
-	x := setup(t, true)
+	x := setup(t, false)
 	record, err := x.app.FindRecordById(configsCollection, configID)
 	must(t, err)
 	var legacy map[string]any

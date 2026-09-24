@@ -33,6 +33,7 @@ final class const DynamicLink({
   final DynamicLinkWarningDialog? warningDialog,
   final String? title,
   final String? trackName,
+  final String? category,
 }) extends Equatable {
   @override
   List<Object?> get props => [
@@ -46,5 +47,6 @@ final class const DynamicLink({
     warningDialog,
     title,
     trackName,
+    category,
   ];
 }

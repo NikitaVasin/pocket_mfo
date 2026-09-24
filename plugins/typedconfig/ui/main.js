@@ -1,5 +1,5 @@
 // Native PocketBase forms. Content authors never need to see or edit JSON.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/typedConfig/editor.css?v=2" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/typedConfig/editor.css?v=4" }));
 const previousAfterSend = app.pb.afterSend;
 app.pb.afterSend = async (response, data) => {
     if (previousAfterSend) data = await previousAfterSend(response, data);
@@ -154,7 +154,7 @@ app.fieldTypes.typedConfig = {
             t.label({ htmlFor: uid + "-type" }, "Тип нового блока"),
             t.div({ className: "tc-toolbar" }, app.components.select({ id: uid + "-type", ariaLabel: "Тип нового блока", value: () => local.type, options: () => schema.types.map(b => ({ value: b.key, label: b.label })), onchange: opts => local.type = opts[0]?.value || "" }),
                 button("Добавить блок", () => { const block = schema.types.find(b => b.key === local.type); if (!block) return; const id = "i" + app.utils.randomString(14); expanded.add(id); replace([...items(), { id, type: block.key, data: objectDefaults(schema, block.fields) }]); }, () => !local.type || items().length >= 100)),
-            t.div({ className: "field", hidden: () => items().length < 5 }, t.input({ type: "search", ariaLabel: "Поиск блоков", placeholder: "Найти блок…", value: () => local.query, oninput: e => local.query = e.target.value })),
+            t.div({ className: "field tc-search", hidden: () => items().length < 5 }, t.input({ type: "search", ariaLabel: "Поиск блоков", placeholder: "Найти блок…", value: () => local.query, oninput: e => local.query = e.target.value })),
             t.div({ className: "tc-cards" }, () => (local.query ? items().filter(i => `${schema.types.find(b => b.key === i.type)?.label} ${summary(i, schema)}`.toLowerCase().includes(local.query.toLowerCase())) : items()).map(card)),
             t.p({ className: "tc-empty", hidden: () => items().length > 0 }, "Здесь пока нет блоков. Выберите тип и добавьте первый."),
             () => app.store.errors?.[name] ? t.p({ role: "alert", className: "field-error" }, app.store.errors[name].message || "Проверьте поля блоков и связанные записи.") : null);
@@ -163,7 +163,16 @@ app.fieldTypes.typedConfig = {
     view(props) {
         const items = props.record[props.field.name] || [], schema = props.field.schema || { types: [] };
         if (!items.length) return t.span({ className: "txt-hint" }, "Нет блоков");
-        return t.div({ className: "tc-preview record-field-view" }, ...items.map(item => t.div({ className: "tc-preview-card" },
-            t.strong(null, schema.types.find(b => b.key === item.type)?.label || "Блок"), t.span({ className: "txt-hint" }, summary(item, schema)))));
+        const types = new Map();
+        for (const item of items) types.set(item.type, (types.get(item.type) || 0) + 1);
+        const description = [...types].map(([type, count]) => {
+            const label = schema.types.find(b => b.key === type)?.label || "Блок";
+            return count > 1 ? `${label} × ${count}` : label;
+        }).join(" · ");
+        const count = items.length;
+        const word = count % 100 >= 11 && count % 100 <= 14 ? "блоков" :
+            count % 10 === 1 ? "блок" : count % 10 >= 2 && count % 10 <= 4 ? "блока" : "блоков";
+        return t.div({ className: "tc-preview record-field-view", title: `${count} ${word}: ${description}` },
+            t.strong(null, `${count} ${word}`), t.span({ className: "txt-hint" }, description));
     },
 };

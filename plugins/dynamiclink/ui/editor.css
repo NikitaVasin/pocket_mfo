@@ -14,10 +14,57 @@ select option:disabled, select optgroup:disabled, select optgroup:disabled optio
 .dl-input { min-width: 0; }
 .dl-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .dl-controls { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.dl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
 .dl-controls > .field, .dl-option > .field { margin: 0; }
 .dl-option { min-width: 0; }
 .dl-option .field-help { margin-top: 6px; }
 .dl-controls summary { cursor: pointer; margin-bottom: 12px; }
 .dl-preview { display: flex; flex-direction: column; min-width: 0; }
 .dl-preview > span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Native surface tokens and 16px rhythm keep settings readable in both themes. */
+.dl-category { padding: 16px; border: 1px solid var(--surfaceAlt2Color); border-radius: 8px; }
+.dl-category-navigation { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dl-category-navigation > .btn { flex-shrink: 0; }
+.dl-category-tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; padding: 4px; }
+.dl-category-tab { flex: 0 0 auto; max-width: 240px; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 6px; background: transparent; color: var(--surfaceTxtColor); font: inherit; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-category-tab:hover { background: var(--surfaceAlt1Color); }
+.dl-category-tab[aria-selected="true"] { background: var(--surfaceAlt2Color); font-weight: 600; }
+.dl-category-tab:focus-visible { outline: 2px solid var(--primaryColor); outline-offset: 1px; }
+.dl-policy-input > p, .dl-policy-input .dl-controls > p, .dl-link-options p { margin: 0; }
+.dl-policy-input > button { align-self: flex-start; }
+.dl-policy-input .field { min-width: 0; }
+
+.dl-settings-page > .ps-record-form, .dl-settings-page > .ps-search-host, .dl-settings-page > p { width: 100%; max-width: 1000px; align-self: center; }
+
+/* Keep collections available to native record forms and relation pickers. */
+.collections-sidebar .nav-item[title="dynamic_link_settings"] { display: none !important; }
+
+.dl-settings-active .ps-record-form .btn.danger { display: none !important; }
+
+.dl-policy-input .dl-switch input.switch {
+    z-index: 2;
+    top: 50%;
+    left: 0;
+    width: var(--switchW);
+    height: var(--switchH);
+    margin: 0;
+    transform: translateY(-50%);
+    cursor: pointer;
+}
+.dl-policy-input .dl-switch input.switch ~ label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.dl-policy-input .dl-switch input.switch ~ label::before { top: calc(50% - var(--switchH) / 2); }
+.dl-policy-input .dl-switch input.switch ~ label::after { top: calc(50% - var(--switchH) / 2 + 4px); }
+@media (max-width: 600px) {
+    .dl-grid { grid-template-columns: minmax(0, 1fr); }
+    .dl-category-navigation { flex-direction: column; align-items: stretch; }
+    .dl-category-navigation > .btn { align-self: flex-start; }
+}
+.dl-option .field-help { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -27,7 +27,7 @@ test("dynamic link can be added to another collection and cleared", async ({ pag
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(field).toHaveCount(0);
     const record = await page.evaluate(async () => (await app.pb.collection("link_banners").getList(1, 1)).items[0]);
-    expect(record.destination).toMatchObject({ url: "https://example.com/banner", mode: "appView", saveCooke: true, showLoader: true });
+    expect(record.destination).toMatchObject({ url: "https://example.com/banner", mode: "browser", saveCooke: true, showLoader: true });
     await page.evaluate(record => app.modals.openRecordUpsert(app.store.collections.find(c => c.name === "link_banners"), record), record);
     await field.getByRole("button", { name: "Очистить ссылку", exact: true }).click();
     await expect(field.getByLabel("URL", { exact: true })).toHaveValue("");

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { selectChoice } from "./select-choice.js";
 
 test("MCP keys are scoped, one-time visible and revocable; push drafts are editable", async ({ page }, testInfo) => {
     const errors = [];
@@ -156,7 +157,7 @@ test('push partner selector searches by name and preserves the selected ID', asy
     await page.reload();
     const push = page.locator('.push-page');
     await push.getByRole('button', { name: 'Новая кампания', exact: true }).click();
-    await push.getByLabel('При нажатии', { exact: true }).selectOption('partner');
+    await selectChoice(push.getByLabel('При нажатии', { exact: true }), 'Открыть партнёрское предложение');
     const selector = push.locator('.push-partner');
     await expect(push.getByLabel('ID партнёрской ссылки', { exact: true })).toHaveCount(0);
     for (const theme of ['light', 'dark']) {
@@ -189,7 +190,7 @@ test('partner selector has retry and empty states without raw ID entry', async (
     await page.route('**/api/collections/partner_links/records?**', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"offline"}' }));
     const push = page.locator('.push-page');
     await push.getByRole('button', { name: 'Новая кампания', exact: true }).click();
-    await push.getByLabel('При нажатии', { exact: true }).selectOption('partner');
+    await selectChoice(push.getByLabel('При нажатии', { exact: true }), 'Открыть партнёрское предложение');
     await expect(push.locator('.push-partner')).toContainText('Не удалось загрузить партнёрские ссылки');
     await page.unroute('**/api/collections/partner_links/records?**');
     await page.route('**/api/collections/partner_links/records?**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ page: 1, perPage: 500, totalItems: 0, totalPages: 0, items: [] }) }));
@@ -318,19 +319,19 @@ test('switching audience condition types initializes valid field values', async 
     await push.getByRole('button', { name: 'Аудитории', exact: true }).click();
     await push.getByRole('button', { name: 'Новая аудитория', exact: true }).click();
     await push.getByLabel('Название аудитории', { exact: true }).fill('Switched condition');
-    await push.getByLabel('Тип условия', { exact: true }).first().selectOption('field');
-    await expect(push.getByLabel('Источник', { exact: true })).toHaveValue('device');
-    await expect(push.getByLabel('Поле', { exact: true })).toHaveValue('platform');
-    await expect(push.getByLabel('Сравнение', { exact: true })).toHaveValue('eq');
+    await selectChoice(push.getByLabel('Тип условия', { exact: true }).first(), 'Поле');
+    await expect(push.getByLabel('Источник', { exact: true })).toContainText('Устройство');
+    await expect(push.getByLabel('Поле', { exact: true })).toContainText('platform');
+    await expect(push.getByLabel('Сравнение', { exact: true })).toContainText('Равно');
     await expect(push.locator('.push-coverage')).toContainText('Доступных устройств: 0');
-    await push.getByLabel('Источник', { exact: true }).selectOption('user');
-    await expect(push.getByLabel('Поле', { exact: true })).toHaveValue('id');
-    await push.getByLabel('Тип условия', { exact: true }).first().selectOption('conversion');
-    await expect(push.getByLabel('Источник', { exact: true })).toHaveValue('conversion');
-    await expect(push.getByLabel('Поле', { exact: true })).toHaveValue('status');
+    await selectChoice(push.getByLabel('Источник', { exact: true }), 'Пользователь');
+    await expect(push.getByLabel('Поле', { exact: true })).toContainText('id');
+    await selectChoice(push.getByLabel('Тип условия', { exact: true }).first(), 'Есть заявка');
+    await expect(push.getByLabel('Источник', { exact: true })).toContainText('Заявка');
+    await expect(push.getByLabel('Поле', { exact: true })).toContainText('status');
     await push.getByRole('button', { name: 'Обновить подсчёт', exact: true }).click();
     await expect(push.locator('.push-coverage')).toContainText('Доступных устройств: 0');
-    await push.getByLabel('Тип условия', { exact: true }).first().selectOption('field');
+    await selectChoice(push.getByLabel('Тип условия', { exact: true }).first(), 'Поле');
     await push.getByRole('button', { name: 'Сохранить аудиторию', exact: true }).click();
     await expect(push.locator('.push-notice')).toContainText('Аудитория сохранена');
     expect(errors).toEqual([]);
@@ -611,9 +612,9 @@ test('campaign overview compares ten campaigns and moves dates without mixing me
     await legend.getByRole('button').first().click();
     await expect(overview.locator('.push-trend path')).toHaveCount(9);
     await legend.getByRole('button').first().click();
-    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('lead');
+    await selectChoice(overview.getByLabel('Показатель графика', { exact: true }), 'Заявки');
     await expect(overview.locator('.push-trend')).toHaveAttribute('aria-label', /^Заявки по дням/);
-    await expect(overview.getByLabel('Показатель графика', { exact: true })).toHaveValue('lead');
+    await expect(overview.getByLabel('Показатель графика', { exact: true })).toContainText('Заявки');
     expect(requests).toHaveLength(1); // Metric and legend changes reuse the same report.
     const initial = requests[0];
     await overview.getByRole('button', { name: '← Раньше', exact: true }).click();
@@ -632,7 +633,7 @@ test('campaign overview compares ten campaigns and moves dates without mixing me
     await overview.getByLabel('По дату', { exact: true }).fill('2025-01-07');
     await overview.getByRole('button', { name: 'Показать', exact: true }).click();
     await expect(overview.locator('.push-trend')).toHaveAttribute('aria-label', /2025-01-01 — 2025-01-07/);
-    await expect(overview.getByLabel('Показатель графика', { exact: true })).toHaveValue('lead');
+    await expect(overview.getByLabel('Показатель графика', { exact: true })).toContainText('Заявки');
     for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 1000 });
         for (const theme of ['light', 'dark']) {
@@ -645,16 +646,16 @@ test('campaign overview compares ten campaigns and moves dates without mixing me
     brokenRevenue = true;
     await overview.getByRole('button', { name: 'Показать', exact: true }).click();
     await expect(overview).toContainText('HTTP 429');
-    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('revenue');
+    await selectChoice(overview.getByLabel('Показатель графика', { exact: true }), 'Revenue по одобрениям, ₽');
     await expect(overview.locator('.push-trend')).toHaveCount(0);
     await expect(table.locator('tbody tr').first().locator('td').nth(5)).toHaveText('—');
-    await overview.getByLabel('Показатель графика', { exact: true }).selectOption('opened');
+    await selectChoice(overview.getByLabel('Показатель графика', { exact: true }), 'Открытия пуша');
     await expect(overview.locator('.push-trend')).toBeVisible();
     expect(errors).toEqual([]);
 });
 
 for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
-    test(`native select popups follow the admin theme with ${plugin} stylesheet alone`, async ({ page }, testInfo) => {
+    test(`PocketBase selectors fit the viewport with ${plugin} stylesheet alone`, async ({ page }, testInfo) => {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         let select;
@@ -667,12 +668,12 @@ for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
             await page.getByRole('button', { name: 'Обзор', exact: true }).click();
             select = page.getByLabel('Показатель графика', { exact: true });
         } else if (plugin === 'partnerlinks') {
-            await openPlugin(page, '#/partner-links');
-            await page.getByRole('button', { name: 'Добавить провайдера', exact: true }).click();
+            await openPlugin(page, '#/partner-links?tab=settings');
+            if (testInfo.project.name === 'schemalock') await page.locator('.pl-provider').last().locator(':scope > summary').click();
+            else await page.getByRole('button', { name: 'Добавить провайдера', exact: true }).click();
             select = page.locator('.pl-provider').last().getByLabel('Где передавать секрет', { exact: true });
         } else {
-            await openPlugin(page, '#/collections');
-            await page.evaluate(() => app.modals.openRecordUpsert(app.store.collections.find(c => c.name === 'partner_links')));
+            await openPlugin(page, '#/dynamic-links');
             select = page.getByLabel('Режим открытия', { exact: true });
         }
         await expect(select).toBeVisible();
@@ -690,28 +691,38 @@ for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
             await page.emulateMedia({ colorScheme: system });
             await page.evaluate(preference => app.store.userColorScheme = preference, preference);
             await expect(page.locator('html')).toHaveAttribute('data-color-scheme', expected);
-            await expect(select).toHaveCSS('color-scheme', expected);
-            const colors = await select.locator('option:not(:disabled)').evaluateAll(options => options.map(option => {
-                const style = getComputedStyle(option);
-                const rgb = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
-                const luminance = value => rgb(value).map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-                const foreground = luminance(style.color), background = luminance(style.backgroundColor);
-                return { background: style.backgroundColor, contrast: (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) };
-            }));
-            expect(colors.length).toBeGreaterThan(1);
-            for (const color of colors) {
-                expect(color.background).not.toBe('rgba(0, 0, 0, 0)');
-                expect(color.contrast).toBeGreaterThanOrEqual(4.5);
-            }
-            if (preference) {
-                await select.click();
-                await page.screenshot({ path: testInfo.outputPath(`select-${plugin}-${expected}.png`) });
-                await page.keyboard.press('Escape');
+            const output = select.locator('..');
+            await expect(output).toHaveClass(/select/);
+            if (preference && await select.isEnabled()) {
+                for (const width of [390, 1280]) {
+                    await page.setViewportSize({ width, height: 1000 });
+                    await select.click();
+                    const dropdown = output.locator('.dropdown');
+                    await expect(dropdown).toBeVisible();
+                    await expect(dropdown).toHaveCSS('opacity', '1');
+                    const geometry = await dropdown.evaluate(el => {
+                        const r = el.getBoundingClientRect();
+                        const style = getComputedStyle(el);
+                        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+                            width: innerWidth, height: innerHeight, background: style.backgroundColor };
+                    });
+                    expect(geometry.left).toBeGreaterThanOrEqual(0);
+                    expect(geometry.right).toBeLessThanOrEqual(geometry.width + 1);
+                    expect(geometry.top).toBeGreaterThanOrEqual(0);
+                    expect(geometry.bottom).toBeLessThanOrEqual(geometry.height + 1);
+                    expect(geometry.background).not.toBe('rgba(0, 0, 0, 0)');
+                    await page.screenshot({ path: testInfo.outputPath(`select-${plugin}-${expected}-${width}.png`), animations: "disabled" });
+                    await page.keyboard.press('Escape');
+                }
             }
         }
-        const nextValue = await select.evaluate(el => [...el.options].find(option => !option.disabled && option.value !== el.value).value);
-        await select.selectOption(nextValue);
-        await expect(select).toHaveValue(nextValue);
+        if (plugin === 'partnerlinks' && testInfo.project.name === 'schemalock') {
+            await expect(select).toBeDisabled();
+        } else {
+            const label = await select.locator('..').locator('.select-option:not(.active)').first().textContent();
+            await selectChoice(select, label.trim());
+            await expect(select).toContainText(label.trim());
+        }
         expect(errors).toEqual([]);
     });
 }

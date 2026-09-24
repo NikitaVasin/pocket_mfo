@@ -17,9 +17,17 @@ import (
 //go:embed ui/*
 var assets embed.FS
 
+const enabledStoreKey = "schemalock.enabled"
+
+// Enabled reports whether Schema Lock is registered on this application.
+func Enabled(app core.App) bool {
+	return app.Store().Get(enabledStoreKey) == true
+}
+
 // Register enables the policy for every HTTP caller, including superusers.
 // Call before Bootstrap/Start. Repeated registration is safe.
 func Register(app core.App) {
+	app.Store().Set(enabledStoreKey, true)
 	variants.LockAdminRules(app)
 	// Request hooks also run for internal batch actions. Model hooks would
 	// incorrectly block trusted plugin writes and migrations.
@@ -81,7 +89,7 @@ func allowed(r *http.Request) bool {
 		"GET /api/variants/me", "GET /api/variants/me/history",
 		"GET /api/variants/admin/users/{auth}/{id}", "GET /api/variants/admin/users/{auth}/{id}/history",
 		"GET /api/variants/admin/collections/{collection}", "PUT /api/variants/admin/collections/{collection}",
-		"GET /api/partnerlinks/admin/config", "PUT /api/partnerlinks/admin/config",
+		"GET /api/partnerlinks/admin/config",
 		"POST /api/partnerlinks/links/{id}/resolve", "GET /api/partnerlinks/r/{token}",
 		"GET /api/partnerlinks/postbacks/{provider}", "POST /api/partnerlinks/postbacks/{provider}",
 		"GET /api/singleton/admin/collections/{collection}":

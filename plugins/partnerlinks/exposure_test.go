@@ -126,7 +126,7 @@ func TestChangedOpeningPolicyRejectsStaleContextWithoutCreatingClick(t *testing.
 	if code := resolve(); code != 200 {
 		t.Fatalf("fresh opening context: %d", code)
 	}
-	row.Set("mode", "browser")
+	row.Set("mode", "appView")
 	must(t, x.app.Save(row))
 	before, err := x.app.CountRecords(ConversationsCollection)
 	must(t, err)

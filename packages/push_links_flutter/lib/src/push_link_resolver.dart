@@ -105,6 +105,7 @@ final class PushLinkResolver {
           warningDialog: original.warningDialog,
           title: original.title,
           trackName: original.trackName,
+          category: original.category,
         );
         // push preserves every existing page, including nested navigation state.
         unawaited(

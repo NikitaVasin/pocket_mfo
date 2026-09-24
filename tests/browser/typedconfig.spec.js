@@ -1,5 +1,44 @@
 import { test, expect } from "@playwright/test";
 
+test("typed config previews keep rows compact for large configurations", async ({ page }, testInfo) => {
+    await page.goto("/_/");
+    await page.waitForFunction(() => window.app?.store?._ready);
+    await page.evaluate(async () => {
+        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
+        for (const count of [0, 1, 100]) {
+            await app.pb.collection("demo_screen_configs").create({
+                title: `Обзор ${count}`,
+                items: Array.from({ length: count }, (_, i) => i % 2 ?
+                    { id: `item${i}`, type: "faq", data: { entries: [{ question: "Вопрос", answer: "Ответ ".repeat(200) }] } } :
+                    { id: `item${i}`, type: "heading", data: { text: "Очень длинный заголовок ".repeat(5) } }),
+            });
+        }
+        await app.store.loadCollections();
+        location.hash = "#/collections?collection=demo_screen_configs";
+    });
+    const row = count => page.getByRole("row").filter({ has: page.getByText(`Обзор ${count}`, { exact: true }) });
+    await expect(row(0).getByText("Нет блоков", { exact: true })).toBeVisible();
+    await expect(row(1).locator(".tc-preview > strong")).toHaveText("1 блок");
+    await expect(row(100).locator(".tc-preview > strong")).toHaveText("100 блоков");
+    await expect(row(100).locator(".tc-preview > span")).toHaveText("Заголовок × 50 · Вопросы и ответы × 50");
+    await expect(row(100).locator(".tc-preview")).toHaveAttribute("title", "100 блоков: Заголовок × 50 · Вопросы и ответы × 50");
+    for (const theme of ["light", "dark"]) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        for (const width of [1280, 390]) {
+            await page.setViewportSize({ width, height: 900 });
+            const one = await row(1).boundingBox(), many = await row(100).boundingBox();
+            expect(many.height).toBeLessThanOrEqual(one.height + 1);
+            if (width > 600) expect(many.height).toBeLessThanOrEqual(80);
+            const preview = row(100).locator(".tc-preview");
+            expect((await preview.boundingBox()).height).toBeLessThanOrEqual(44);
+            expect(await preview.locator("span").evaluate(el => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+            await preview.screenshot({ path: `test-results/typedconfig-preview-${testInfo.project.name}-${theme}-${width}.png`, animations: "disabled" });
+        }
+    }
+    await row(100).getByText("Обзор 100", { exact: true }).click();
+    await expect(page.locator(".tc-editor .tc-card")).toHaveCount(100);
+});
+
 test("typed configurations use cards, nested forms and native reference pickers without JSON", async ({ page }, testInfo) => {
     const errors = [];
     page.on("pageerror", e => errors.push(e.message));
@@ -99,10 +138,17 @@ test("typed configurations use cards, nested forms and native reference pickers 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole("cell", { name: "Тест редактора", exact: true }).click();
     await expect(editor.locator(".tc-card")).toHaveCount(3);
+    await editor.getByRole("button", { name: "Добавить блок", exact: true }).click();
+    await editor.getByRole("button", { name: "Добавить блок", exact: true }).click();
+    await expect(editor.getByLabel("Поиск блоков", { exact: true })).toBeVisible();
+
     for (const theme of ["light", "dark"]) {
         await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        const gap = await editor.evaluate(el => el.querySelector(".tc-cards").getBoundingClientRect().top - el.querySelector(".tc-search").getBoundingClientRect().bottom);
+        expect(gap).toBeGreaterThanOrEqual(16);
         await page.screenshot({ path: `test-results/typedconfig-overview-${testInfo.project.name}-${theme}.png`, fullPage: true, animations: "disabled" });
     }
+    page.once("dialog", dialog => dialog.accept());
     await page.locator(".record-upsert-modal").getByRole("button", { name: "Close", exact: true }).click();
     const afterDelete = await page.evaluate(async data => {
         await app.pb.collection("partner_links").delete(data.offerID);

@@ -10,7 +10,7 @@ import (
 
 func TestDecodeAndDefaults(t *testing.T) {
 	value, err := Decode([]byte(`{"url":"https://example.com/path?a=1"}`))
-	if err != nil || value.Mode != "appView" || !value.SaveCooke || !value.ShowLoader || value.ChangeClient || value.OpenURLsInBrowser {
+	if err != nil || value.Mode != "browser" || !value.SaveCooke || !value.ShowLoader || value.ChangeClient || value.OpenURLsInBrowser {
 		t.Fatalf("defaults: %+v %v", value, err)
 	}
 	for _, raw := range []string{`[]`, `{}`, `"https://example.com"`, `{"url":"javascript:alert(1)"}`, `{"url":"https://u:p@example.com"}`, `{"url":"https://example.com","mode":"other"}`, `{"url":"https://example.com","saveCooke":"false"}`, `{"url":"https://example.com","showLoader":null}`, `{"url":"https://example.com","unknown":true}`, `{"url":"https://example.com","warningDialog":{"title":"Only title"}}`} {
@@ -72,7 +72,7 @@ func TestStandaloneFieldRoundTripAndValidation(t *testing.T) {
 	if err = loaded.UnmarshalJSONField("destination", &stored); err != nil {
 		t.Fatal(err)
 	}
-	if stored["saveCooke"] != true || stored["mode"] != "appView" {
+	if stored["saveCooke"] != true || stored["mode"] != "browser" {
 		t.Fatal("defaults were not stored")
 	}
 	r.Set("destination", map[string]any{"url": "https://example.com", "mode": "invalid"})
@@ -84,7 +84,7 @@ func TestStandaloneFieldRoundTripAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	value, err := Decode([]byte(loaded.GetString("destination")))
-	if err != nil || value.Mode != "appView" {
+	if err != nil || value.Mode != "browser" {
 		t.Fatal("failed update changed data")
 	}
 }

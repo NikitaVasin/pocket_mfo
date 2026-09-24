@@ -1,9 +1,9 @@
 // PocketBase v0.40.4 UI extension; authorization is enforced on the server.
-document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=6" }));
+document.head.append(t.link({ rel: "stylesheet", href: "/_/extensions/partnerlinks/editor.css?v=10" }));
 const settingsPath = "#/partner-links";
 app.store.headerLinks = [...app.store.headerLinks, { label: "Партнёрские ссылки", href: settingsPath, icon: "ri-links-line" }];
-app.routes.superuserOnly(settingsPath, () => t.div({ className: "page" }, partnerSettingsContent()));
-app.routes.superuserOnly("#/settings/partner-links", () => { location.replace(settingsPath); return t.div(); });
+app.routes.superuserOnly(settingsPath, () => partnerPage());
+app.routes.superuserOnly("#/settings/partner-links", () => { location.replace(settingsPath + "?tab=settings"); return t.div(); });
 // Redirect earlier query bookmarks without modifying the native settings shell.
 document.addEventListener("mount:pageApplicationSettings", () => {
     if (app.utils.getHashQueryParams().plugin === "partnerlinks") location.replace(settingsPath);
@@ -66,8 +66,19 @@ app.fieldTypes.text.input = function(props) {
             ? t.div({ className: "field-help" }, "Сначала добавьте и сохраните провайдера в разделе «Партнёрские ссылки».") : null);
 };
 
-function partnerSettingsContent() {
+function partnerPage() {
     app.store.title = "Партнёрские ссылки";
+    const settings = app.utils.getHashQueryParams().tab === "settings";
+    return t.div({ className: "page" }, t.div({ pbEvent: "pagePartnerLinks", className: "page-content" },
+        t.header({ className: "page-header" }, t.nav({ className: "breadcrumbs" }, t.div({ className: "breadcrumb-item" }, "Партнёрские ссылки"))),
+        t.div({ className: "wrapper" },
+            t.nav({ className: "pl-tabs", ariaLabel: "Разделы партнёрских ссылок" },
+                t.a({ href: settingsPath, className: `btn ${settings ? "secondary" : ""}`, ariaCurrent: settings ? undefined : "page" }, "Ссылки"),
+                t.a({ href: settingsPath + "?tab=settings", className: `btn ${settings ? "" : "secondary"}`, ariaCurrent: settings ? "page" : undefined }, "Настройки")),
+            settings ? partnerSettingsContent() : partnerLinkCards())));
+}
+
+function partnerSettingsContent() {
     const state = store({ config: null, error: "", notice: "", loading: true, saving: false });
     let sequence = 0;
     const expandedProviders = new Map();
@@ -84,10 +95,10 @@ function partnerSettingsContent() {
             hint = () => `Задано в Go-коде. ${typeof original === "function" ? original() : original}`;
         }
         const id = `pl-input-${++sequence}`;
-        const update = event => { object[key] = type === "number" ? Number(event.target.value) : event.target.value; };
+        const update = value => { object[key] = type === "number" ? Number(value) : value; };
         const control = choices
-            ? t.select({ id, required, disabled: locked, ariaDescribedby: hint ? `${id}-help` : undefined, value: () => object[key], onchange: update }, choices.map(([value, text]) => t.option({ value }, text)))
-            : t.input({ id, type, required, disabled: locked, ariaDescribedby: hint ? `${id}-help` : undefined, placeholder, min: type === "number" ? 0 : undefined, autocomplete: type === "password" ? "new-password" : "off", value: () => object[key] ?? "", oninput: update });
+            ? app.components.select({ id, required: true, disabled: locked, value: () => object[key], options: choices.map(([value, label]) => ({ value, label })), onchange: options => update(options[0]?.value || "") })
+            : t.input({ id, type, required, disabled: locked, ariaDescribedby: hint ? `${id}-help` : undefined, placeholder, min: type === "number" ? 0 : undefined, autocomplete: type === "password" ? "new-password" : "off", value: () => object[key] ?? "", oninput: event => update(event.target.value) });
         return t.div({ className: "pl-field" }, t.label({ className: "pl-label", htmlFor: id }, label), t.div({ className: "field pl-control" }, control),
             hint ? t.div({ id: `${id}-help`, className: "field-help pl-wrap" }, hint) : null);
     }
@@ -174,9 +185,9 @@ function partnerSettingsContent() {
     function presetSelector(provider, index) {
         const id = `pl-input-${++sequence}`;
         return t.div({ className: "pl-field" }, t.label({ className: "pl-label", htmlFor: id }, "Пресет партнёра"),
-            t.div({ className: "field pl-control" }, t.select({ id, value: () => provider.preset || "", onchange: event => applyPreset(provider, index, event.target.value) },
-                t.option({ value: "" }, "Ручная настройка"),
-                (state.config.presets || []).map(preset => t.option({ value: preset.id }, preset.name)))),
+            t.div({ className: "field pl-control" }, app.components.select({ id, required: true, value: () => provider.preset || "", placeholder: "Ручная настройка",
+                options: [{ value: "", label: "Ручная настройка" }, ...(state.config.presets || []).map(preset => ({ value: preset.id, label: preset.name }))],
+                onchange: options => applyPreset(provider, index, options[0]?.value || "") })),
             t.p({ className: "field-help" }, "Выбор пресета заменяет шаблон, поля и статусы. ID, название и введённый секрет сохраняются."));
     }
     function presetGuide(provider) {
@@ -199,7 +210,7 @@ function partnerSettingsContent() {
                     t.table({ className: "pl-preset-table" }, t.thead(null, t.tr(null, t.th(null, "Имя параметра"), t.th(null, "Макрос Rafinad"))),
                         t.tbody(null, ["p_click_id", "status", "order_id", "publisher_commission", "currency"].map(key => t.tr(null, t.td(null, t.code(null, key)), t.td(null, t.code(null, `{${key}}`))))))),
                 t.li(null, "В «Константы» добавьте имя secret и его значение:", t.div({ className: "pl-endpoint" }, t.code(null, provider.secret || "Сначала задайте секрет постбека"))),
-                t.li(null, "Сохраните постбек в Rafinad. В нашей коллекции partner_links выберите этого провайдера и вставьте исходную ссылку потока Rafinad в поле link. Параметр p_click_id с токеном сервер добавит сам при переходе."),
+                t.li(null, "Сохраните постбек в Rafinad. Во вкладке «Ссылки» выберите этого провайдера и вставьте исходную ссылку потока Rafinad в поле link. Параметр p_click_id с токеном сервер добавит сам при переходе."),
                 t.li(null, "Проверьте переход из приложения и постбек по полученному p_click_id: ответ 200 означает успешную отправку события в AppMetrica. Произвольный тестовый токен не подойдёт — сначала нужна выданная приложению ссылка.")),
             t.p(null, "publisher_commission — ваша комиссия, order_total — сумма заказа и здесь не используется. Даты Rafinad имеют строковый формат, поэтому время берётся при получении постбека. Revenue по умолчанию выключен; при необходимости включите его ниже и выберите статус начисления."));
     }
@@ -239,7 +250,7 @@ function partnerSettingsContent() {
                     field("Когда начислять Revenue", provider, "revenueStatus", { choices: [["approved", "Подтверждение (апрув)"], ["hold", "Холд / ожидание"]], hint: "Выберите один статус из «Соответствия статусов». Если доход учитывается на холде, последующее подтверждение не отправляет Revenue. По умолчанию — подтверждение." }),
                     t.p({ className: "txt-hint" }, "При включённой передаче Revenue отправляется только для выбранного статуса. Настройте ID заявки, сумму и валюту. Сумма — ваш доход от партнёра, не сумма займа. Валюта — RUB, USD и т. п. Доходы появятся в отчётах монетизации."),
                     t.p({ className: "txt-hint" }, () => `Для воронки используйте ${state.config.eventNames.click} → ${state.config.eventNames.lead} → ${state.config.eventNames[provider.revenueStatus]}.`),
-                    t.p({ className: "txt-hint" }, "Повторный постбек выбранного статуса может повторно начислить Revenue. Автоматических повторов и дедупликации нет. Отказ не начисляет доход и не отменяет уже переданный Revenue. Смена выбранного статуса действует на все следующие постбеки, включая ранее созданные заявки.")), extras(provider),
+                    t.p({ className: "txt-hint" }, "Подтверждённый Revenue повторно не начисляется, в том числе после смены выбранного статуса. Отказ не начисляет доход и не отменяет уже переданный Revenue. При неизвестном результате отправки нужна сверка с AppMetrica.")), extras(provider),
                 t.details({ className: "pl-examples" }, t.summary(null, "Примеры постбеков: URL, заголовок и body"),
                     t.p(null, "Примеры ниже используют поля subid, status и lead_id. YOUR_SECRET — секрет, известный только вам и партнёру; CLICK_DATA — токен, полученный партнёром из ссылки."),
                     t.p(null, "Секрет в URL: выберите «Параметр URL», имя secret."),
@@ -258,22 +269,20 @@ function partnerSettingsContent() {
                 t.li(null, "В AppMetrica откройте настройки нужного приложения. Скопируйте числовой Application ID и Post API key в поля ниже. Это ключ для серверной загрузки событий, а не SDK API key."),
                 t.li(null, "Укажите публичный HTTPS-адрес этого сервера, доступный приложению и партнёру. При выдаче ссылки сервер сохраняет данные клика в conversations. Партнёр получает только случайный токен clickData и возвращает его в постбеке."),
                 t.li(null, "Добавьте провайдера. По его документации настройте параметр передачи clickData, имена полей постбека и значения статусов. Передайте партнёру адрес постбека и секрет."),
-                t.li(null, "Сохраните настройки. В коллекции partner_links создайте запись: name — название, provider — выберите сохранённого провайдера из списка, active — включено. В поле link (Dynamic link) укажите исходный URL и параметры открытия; по умолчанию используются WebView, cookies и индикатор загрузки."),
+                t.li(null, "Сохраните настройки. Нажмите «Добавить ссылку» над карточками: name — название, provider — выберите сохранённого провайдера из списка, active — включено. В поле link (Dynamic link) укажите исходный URL и при необходимости категорию. По умолчанию открывается внешний браузер; поведение категории задаётся в Dynamic Link."),
                 t.li(null, "AppMetrica profileId всегда равен ID пользователя PocketBase. Передайте user.id в SDK до активации; отдельное поле пользователя не требуется. Приложение запрашивает ссылку только по ID записи partner_links; сервер использует ID авторизованного пользователя. При переходе отправляется клик. Для заявки и дальнейших статусов партнёр присылает отдельные постбеки.")),
-            t.p({ className: "txt-hint" }, "200 в ответе постбека означает, что AppMetrica приняла загрузку. При 502 партнёр должен повторить запрос. Повторы могут создавать дубли: очередь и дедупликация здесь не используются."));
+            t.p({ className: "txt-hint" }, "200 в ответе постбека означает подтверждённый приём загрузки AppMetrica, включая уже обработанный повтор. Подтверждённые события и Revenue повторно не отправляются. При 502 повтор поможет после явного отказа; при таймауте или обрыве связи сначала нужна сверка результата."));
     }
     load();
-    return t.div({ pbEvent: "pagePartnerLinks", className: "page-content" },
-            t.header({ className: "page-header" }, t.nav({ className: "breadcrumbs" }, t.div({ className: "breadcrumb-item" }, "Партнёрские ссылки"))),
-            t.div({ className: "wrapper pl-settings" },
+    return t.div({ className: "pl-settings" },
                 () => state.error ? t.div({ role: "alert", className: "alert alert-danger pl-wrap" }, state.error) : null,
                 () => state.notice ? t.div({ role: "status", className: "alert" }, state.notice) : null,
                 guide(),
                 () => state.loading ? t.p({ role: "status" }, "Загрузка…") : null,
                 () => !state.config && !state.loading ? button("Повторить загрузку", load) : null,
                 () => state.config ? t.form({ onsubmit: saveSettings },
-                    state.config.locks?.all ? t.div({ className: "alert pl-managed-note", role: "status" }, "Настройки доступны только для просмотра. LockAdminConfig включён в Go-коде.") : null,
-                    t.h2(null, "AppMetrica"), t.p({ className: "txt-hint" }, "Здесь настраиваются события и провайдеры. Сами партнёрские ссылки редактируются в коллекции partner_links."),
+                    state.config.locks?.all ? t.div({ className: "alert pl-managed-note", role: "status" }, "Настройки доступны только для просмотра. Изменения разрешены только из Go-кода.") : null,
+                    t.h2(null, "AppMetrica"), t.p({ className: "txt-hint" }, "Здесь настраиваются события и провайдеры. Партнёрские ссылки находятся во вкладке «Ссылки»."),
                     t.div({ className: "pl-grid" },
                         field("Публичный URL сервера", state.config, "baseUrl", { type: "url", hint: "Например https://api.example.com — без /api и /_/. Из него формируются адреса переходов и постбеков." }),
                         field("Application ID", state.config, "applicationId", { type: "number", hint: "Числовой идентификатор приложения в AppMetrica, например 1234567." }),
@@ -286,5 +295,45 @@ function partnerSettingsContent() {
                         t.p({ className: "txt-hint" }, "По умолчанию уже заданы стандартные события плагина. Меняйте имена только для совместимости с вашей аналитикой. В AppMetrica они учитываются как пользовательские события. Значения, присылаемые партнёром, настраиваются отдельно в соответствии статусов провайдера."),
                         t.div({ className: "pl-grid" }, Object.keys(state.config.eventNames).map(key => field(eventLabels[key] || key, state.config.eventNames, key, { required: true })))),
                     t.h2(null, "Провайдеры"), () => state.config.providers.map(providerEditor),
-                    t.div({ className: "pl-actions" }, button("Добавить провайдера", newProvider), t.button({ type: "submit", className: "btn", disabled: () => state.saving || !!state.config.locks?.all }, () => state.saving ? "Сохранение…" : "Сохранить настройки"))) : null));
+                    t.div({ className: "pl-actions" }, button("Добавить провайдера", newProvider), t.button({ type: "submit", className: "btn", disabled: () => state.saving || !!state.config.locks?.all }, () => state.saving ? "Сохранение…" : "Сохранить настройки"))) : null);
+}
+
+
+function partnerLinkCards() {
+    const state = store({ items: [], loading: true, error: "", query: "", page: 1, totalPages: 1, total: 0 });
+    let generation = 0, timer;
+    const collection = () => app.store.collections.find(c => c.name === "partner_links");
+    async function load() {
+        const current = ++generation;
+        state.loading = true; state.error = "";
+        try {
+            const result = await app.pb.collection("partner_links").getList(state.page, 24, {
+                sort: "name,id", expand: "content_set", requestKey: null,
+                filter: state.query.trim() ? app.pb.filter("name ~ {:q} || provider ~ {:q}", { q: state.query.trim() }) : "",
+            });
+            if (current !== generation) return;
+            state.items = result.items; state.totalPages = result.totalPages; state.total = result.totalItems;
+        } catch (error) { if (current === generation) state.error = error?.response?.message || "Не удалось загрузить ссылки"; }
+        finally { if (current === generation) state.loading = false; }
+    }
+    const edit = record => app.modals.openRecordUpsert(collection(), record, { onsave: load, ondelete: () => { state.page = 1; load(); } });
+    const uid = "pl-search-" + app.utils.randomString();
+    return t.section({ className: "pl-links", ariaLabel: "Ссылки", onmount: load, onunmount: () => { generation++; clearTimeout(timer); } },
+        t.div({ className: "pl-links-heading" }, t.h2(null, "Ссылки"), t.button({ type: "button", className: "btn", disabled: () => !collection(), onclick: () => edit(null) }, "Добавить ссылку")),
+        t.div({ className: "field pl-links-search" }, t.label({ htmlFor: uid }, "Поиск ссылок"), t.input({ id: uid, type: "search", placeholder: "Название или провайдер", value: () => state.query, oninput: e => { state.query = e.target.value; state.page = 1; clearTimeout(timer); timer = setTimeout(load, 200); } })),
+        () => state.error ? t.div({ role: "alert" }, state.error, t.button({ type: "button", className: "btn secondary", onclick: load }, "Повторить")) : null,
+        t.p({ role: "status", hidden: () => !state.loading }, "Загрузка ссылок…"),
+        t.p({ className: "txt-hint", hidden: () => state.loading || !!state.error || state.items.length > 0 }, "Ссылок пока нет или ничего не найдено."),
+        t.div({ className: "pl-link-cards", "html-aria-busy": () => state.loading }, () => state.items.map(record =>
+            t.button({ type: "button", className: "pl-link-card", onclick: () => edit(record), ariaLabel: "Редактировать: " + record.name },
+                t.div({ className: "pl-links-heading" }, t.strong(null, record.name), t.span({ className: record.active ? "txt-success" : "txt-hint" }, record.active ? "Активна" : "Выключена")),
+                t.span({ className: "txt-hint" }, record.provider + (record.link?.category ? " · " + record.link.category : " · Общие настройки")),
+                t.span({ className: "pl-link-url" }, record.link?.url || "URL не задан"),
+                record.expand?.content_set ? t.small({ className: "txt-hint" }, [record.expand.content_set.variant, record.expand.content_set.experiment, record.expand.content_set.group].filter(Boolean).join(" / ")) : null))),
+        t.div({ className: "pl-links-heading pl-link-pagination" },
+            t.span({ className: "txt-hint" }, () => `Всего: ${state.total}`),
+            t.div({ className: "pl-links-heading" },
+                t.button({ type: "button", className: "btn secondary", disabled: () => state.loading || state.page <= 1, onclick: () => { state.page--; load(); } }, "Назад"),
+                t.span(null, () => `${state.page} / ${Math.max(1, state.totalPages)}`),
+                t.button({ type: "button", className: "btn secondary", disabled: () => state.loading || state.page >= state.totalPages, onclick: () => { state.page++; load(); } }, "Далее"))));
 }

@@ -33,7 +33,7 @@ await result.link.open(context);
 
 Не выполняйте предварительный GET/HEAD публичного URL и не кешируйте результат для следующих нажатий. Каждый вызов `openPartnerLink`/`resolvePartnerLink` выдаёт новый токен, а клик отправляется при GET-редиректе в WebView/браузере. Никаких автоматических повторов HTTP в клиенте нет.
 
-Режимы: `appView` — WebView Android/iOS и встроенный браузер ОС на остальных платформах; `view` — встроенный браузер ОС; `browser` — внешнее приложение. Все параметры `DynamicLink`, включая `saveCooke`, warning dialog и title, передаются без переименования. Для своего платформенного слоя передайте `actions`, `embeddedViewBuilder` или `warningDialogBuilder`.
+Режимы: `appView` — WebView Android/iOS и встроенный браузер ОС на остальных платформах; `view` — встроенный браузер ОС; `browser` — внешнее приложение. Все параметры `DynamicLink`, включая `saveCooke`, warning dialog, title и category, передаются без переименования. Для своего платформенного слоя передайте `actions`, `embeddedViewBuilder` или `warningDialogBuilder`.
 
 `ClientException` PocketBase передаётся вызывающему коду. Неполный/неверный DTO вызывает `FormatException`; пустой linkId — `ArgumentError`. При удалённом во время запроса Flutter-контексте `openPartnerLink` возвращает false. Возвращаемый bool открытия наследует семантику `dynamic_link_flutter` и не подтверждает загрузку страницы или запись конверсии.
 

@@ -38,16 +38,21 @@ final class PushDevices {
   final PocketBase pocketBase;
   final SessionStorage storage;
   final Future<String?> Function() _deviceId;
-  Future<Map<String, String>>? _credentials;
+  Map<String, String>? _credentials;
   Future<void> _queue = Future.value();
   bool _disposed = false;
 
   String get _key =>
       'push_device_${sha256.convert(utf8.encode(pocketBase.baseURL))}';
-  Future<Map<String, String>> _load() => _credentials ??= (() async {
+  // Calls are serialized by _serial. Cache only successfully persisted data,
+  // so a transient storage failure remains retryable on the next sync.
+  Future<Map<String, String>> _load() async {
+    if (_credentials case final credentials?) return credentials;
     final existing = await storage.read(_key);
     if (existing != null) {
-      return Map<String, String>.from(jsonDecode(existing) as Map);
+      return _credentials = Map<String, String>.from(
+        jsonDecode(existing) as Map,
+      );
     }
     final random = Random.secure();
     const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -61,8 +66,8 @@ final class PushDevices {
     };
     // Persist before the request: retrying a lost response keeps the same ID.
     await storage.write(_key, jsonEncode(credentials));
-    return credentials;
-  })();
+    return _credentials = credentials;
+  }
 
   Future<void> _serial(Future<void> Function() action) {
     final result = _queue.then((_) async {

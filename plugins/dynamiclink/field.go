@@ -40,7 +40,7 @@ func Decode(raw []byte) (*Value, error) {
 			return nil, fmt.Errorf("dynamicLink: %s cannot be null", key)
 		}
 	}
-	v := Value{Mode: "appView", SaveCooke: true, ShowLoader: true}
+	v := Value{Mode: "browser", SaveCooke: true, ShowLoader: true}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&v); err != nil {
@@ -94,6 +94,30 @@ func (f *Field) ValidateValue(ctx context.Context, app core.App, r *core.Record)
 	}
 	if value == nil && f.Required {
 		return fmt.Errorf("dynamicLink: URL is required")
+	}
+	if value != nil && value.Category != "" {
+		original, _ := Decode([]byte(r.Original().GetString(f.Name)))
+		// Deleted categories fall back to the global policy. Do not prevent
+		// unrelated edits to a link that previously selected such a category.
+		if original != nil && original.Category == value.Category {
+			return nil
+		}
+		records, err := app.FindAllRecords(SettingsCollection)
+		if err != nil {
+			return fmt.Errorf("dynamicLink: categories are not configured")
+		}
+		for _, record := range records {
+			categories, err := decodeCategories(record)
+			if err != nil {
+				return err
+			}
+			for _, category := range categories {
+				if category.Key == value.Category {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("dynamicLink: unknown category %q", value.Category)
 	}
 	return nil
 }

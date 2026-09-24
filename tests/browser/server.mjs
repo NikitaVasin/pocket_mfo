@@ -11,6 +11,7 @@ const port = locked ? 8099 : 8097;
 try {
     execFileSync("go", ["build", "-o", binary, locked ? "./example" : "./tests/testapp"], { stdio: "inherit", env: { ...process.env, GOTOOLCHAIN: "auto" } });
     execFileSync(binary, ["migrate", "up", "--dir", data], { stdio: "inherit" });
+    execFileSync("go", ["run", "./tests/browser/seed", data, locked ? "locked" : "unlocked"], { stdio: "inherit", env: { ...process.env, GOTOOLCHAIN: "auto" } });
     // Test-only credentials, created exclusively inside a disposable directory.
     execFileSync(binary, ["superuser", "create", "browser@example.test", "browser-test-password-123", "--dir", data], { stdio: "inherit" });
     const server = spawn(binary, ["serve", `--http=127.0.0.1:${port}`, "--dir", data], { stdio: "inherit" });

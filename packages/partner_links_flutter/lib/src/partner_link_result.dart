@@ -78,6 +78,7 @@ final class PartnerLinkResult {
         warningDialog: warning,
         title: optionalString(raw, 'title'),
         trackName: optionalString(raw, 'trackName'),
+        category: optionalString(raw, 'category'),
       ),
     );
   }

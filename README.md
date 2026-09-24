@@ -2,7 +2,7 @@
 
 Набор подключаемых Go-плагинов и общий стенд для их проверки.
 
-**Каталог 1 — v1.0.0.** [Критерии совместимости](docs/COMPATIBILITY.md) · [Изменения выпуска](CHANGELOG.md).
+**Каталог 1 — v1.0.1.** [Критерии совместимости](docs/COMPATIBILITY.md) · [Изменения выпуска](CHANGELOG.md).
 
 **Интеграция в приложение с AI-агентом:** [единое руководство](docs/AI_INTEGRATION.md) — обязательное интервью, устройство всех плагинов, подключение Go/Flutter, необходимые ключи и файлы, настройка AppMetrica/Firebase/APNs, постбеков и MCP, проверки и передача результата.
 
@@ -91,10 +91,10 @@ func main() {
 }
 ```
 
-Go module path: `github.com/NikitaVasin/pocket_mfo`. После отправки исходников в [репозиторий](https://github.com/NikitaVasin/pocket_mfo) подключение из другого проекта:
+Go module path: `github.com/NikitaVasin/pocket_mfo`. После публикации тега `v1.0.1` в [репозитории](https://github.com/NikitaVasin/pocket_mfo) подключение из другого проекта:
 
 ```sh
-go get github.com/NikitaVasin/pocket_mfo@v1.0.0
+go get github.com/NikitaVasin/pocket_mfo@v1.0.1
 ```
 
 Для воспроизводимых сборок фиксируйте выбранную версию или commit. Для локальной разработки используйте `replace github.com/NikitaVasin/pocket_mfo => ../pocket_mfo`. Порядок публикации и вариант приватного репозитория описаны в [инструкции](docs/PUBLISHING.md).

@@ -2,24 +2,24 @@
 
 Репозиторий: [NikitaVasin/pocket_mfo](https://github.com/NikitaVasin/pocket_mfo). Один Go-модуль `github.com/NikitaVasin/pocket_mfo` содержит десять пакетов плагинов. У них общая версия; отдельные go.mod внутри plugins не нужны. `.git` используется в Git URL, но не в module path или Go-импортах.
 
-Первый выпуск каталога — **v1.0.0**, версия в [VERSION](../VERSION). Перед интеграцией обязательны [критерии совместимости](COMPATIBILITY.md); состав выпуска описан в [CHANGELOG](../CHANGELOG.md). Тег относится ко всему каталогу, а не к версии PocketBase или мобильного приложения.
+Текущая версия каталога — **v1.0.1**, версия в [VERSION](../VERSION). Перед интеграцией обязательны [критерии совместимости](COMPATIBILITY.md); состав выпуска описан в [CHANGELOG](../CHANGELOG.md). Тег относится ко всему каталогу, а не к версии PocketBase или мобильного приложения.
 
-## Подготовка первого выпуска
+## Подготовка выпуска
 
-1. Прочитайте [актуальный отчёт готовности](RELEASE_READINESS_2026-09-23.md) и выполните проверки из [CONTRIBUTING.md](../CONTRIBUTING.md). Просмотрите `git status` и diff; не включайте базы, бэкапы и пользовательские секреты. Example содержит только намеренно опубликованные демопароли.
+1. Прочитайте [отчёт готовности](RELEASE_READINESS_2026-09-23.md) и [последующее ревью](REVIEW_2026_09_24.md) и выполните проверки из [CONTRIBUTING.md](../CONTRIBUTING.md). Просмотрите `git status` и diff; не включайте базы, бэкапы и пользовательские секреты. Example содержит только намеренно опубликованные демопароли.
 2. Если remote ещё не настроен, добавьте `origin` с адресом `https://github.com/NikitaVasin/pocket_mfo.git` или `git@github.com:NikitaVasin/pocket_mfo.git`. Перед отправкой проверьте `git remote -v` и существующую историю удалённой ветки. Не перезаписывайте её через force push.
 3. Отправьте согласованный коммит и дождитесь GitHub Actions. Workflow выполняет проверки, но ничего не публикует и не создаёт теги автоматически.
-4. Для первого выпуска используйте аннотированный SemVer-тег **v1.0.0** на коммите с VERSION, changelog и критериями совместимости. Проверьте `git show v1.0.0` и результат CI этого коммита перед отправкой тега. При отдельном поручении опубликовать тег отправляйте именно `git push origin v1.0.0`, не все локальные теги. Существующий тег не перезаписывайте. Локальное создание тега не делает его доступным потребителям GitHub.
+4. Для этого выпуска используйте аннотированный SemVer-тег **v1.0.1** на коммите с VERSION, changelog и критериями совместимости. Проверьте `git show v1.0.1` и результат CI этого коммита перед отправкой тега. При отдельном поручении опубликовать тег отправляйте именно `git push origin v1.0.1`, не все локальные теги. Существующий тег не перезаписывайте. Локальное создание тега не делает его доступным потребителям GitHub.
 5. Для следующих выпусков описывайте изменения контракта, совместимую версию PocketBase и необходимые миграции. Мажорная версия v2 потребует суффикса `/v2` в пути Go-модуля и импортах.
 
 Лицензия пока не выбрана и по решению владельца не добавлена. Публичность исходников сама по себе не задаёт условия свободного использования; не указывайте вымышленную лицензию в README или метаданных выпуска.
 
 ## Подключение к приложению
 
-После отправки исходников в GitHub:
+После публикации тега `v1.0.1` в GitHub:
 
 ```sh
-go get github.com/NikitaVasin/pocket_mfo@v1.0.0
+go get github.com/NikitaVasin/pocket_mfo@v1.0.1
 ```
 
 В production фиксируйте конкретный тег или commit в go.mod/go.sum. Импортируйте нужный пакет, например:
@@ -36,7 +36,7 @@ schemalock.Register(app)
 Для соседнего локального checkout:
 
 ```go
-require github.com/NikitaVasin/pocket_mfo v1.0.0
+require github.com/NikitaVasin/pocket_mfo v1.0.1
 
 replace github.com/NikitaVasin/pocket_mfo => ../pocket_mfo
 ```
@@ -45,7 +45,7 @@ replace github.com/NikitaVasin/pocket_mfo => ../pocket_mfo
 
 ## Dart/Flutter-пакеты
 
-Шесть пакетов `packages/*` используют соседние path-зависимости и `publish_to: none`; публикация Go-модуля не публикует их на pub.dev. Подключайте полный checkout репозитория на теге v1.0.0 с фиксацией его commit (например, как Git submodule в `vendor/pocket_mfo`) и зависимость приложения:
+Шесть пакетов `packages/*` используют соседние path-зависимости и `publish_to: none`; публикация Go-модуля не публикует их на pub.dev. Подключайте полный checkout репозитория на теге v1.0.1 с фиксацией его commit (например, как Git submodule в `vendor/pocket_mfo`) и зависимость приложения:
 
 ```yaml
 dependencies:
@@ -65,7 +65,7 @@ dependencies:
 
 ```sh
 GOPRIVATE="${GOPRIVATE:+$GOPRIVATE,}github.com/NikitaVasin/pocket_mfo" \
-  go get github.com/NikitaVasin/pocket_mfo@v1.0.0
+  go get github.com/NikitaVasin/pocket_mfo@v1.0.1
 ```
 
 `GOPRIVATE` исключает модуль из публичного proxy/checksum database; доступ к Git оно не предоставляет. Используйте SSH-ключ с доступом к репозиторию либо HTTPS credential helper. Секреты храните в менеджере credentials или secrets CI, не в module path, исходниках и workflow. Стандартный `GITHUB_TOKEN` другого репозитория не даёт автоматического доступа к этому приватному модулю.

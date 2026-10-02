@@ -7,7 +7,9 @@ const dir = mkdtempSync(join(tmpdir(), "pocket-mfo-browser-"));
 const binary = join(dir, "pocketbase");
 const data = join(dir, "pb_data");
 const locked = process.argv.includes("--locked");
-const port = locked ? 8099 : 8097;
+// Legacy partner fixtures exist only in this disposable test environment.
+process.env.DEMO_PARTNER_ENABLED = "1";
+const port = locked ? (process.env.POCKETBASE_BROWSER_LOCKED_PORT || 8099) : (process.env.POCKETBASE_BROWSER_PORT || 8097);
 try {
     execFileSync("go", ["build", "-o", binary, locked ? "./example" : "./tests/testapp"], { stdio: "inherit", env: { ...process.env, GOTOOLCHAIN: "auto" } });
     execFileSync(binary, ["migrate", "up", "--dir", data], { stdio: "inherit" });

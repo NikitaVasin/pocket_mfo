@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -21,6 +22,7 @@ var assets embed.FS
 
 // Register must be called before Bootstrap/Start. Hook IDs make registration idempotent.
 func Register(app core.App) {
+	adminui.Register(app)
 	app.OnBootstrap().Bind(&hook.Handler[*core.BootstrapEvent]{Id: "variants", Func: func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
 			return err

@@ -8,6 +8,9 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createServer as createTcpServer } from 'node:net';
 
+// Enable the bundled partner only in the disposable integration fixture.
+process.env.DEMO_PARTNER_ENABLED = '1';
+
 const root = resolve('examples/partner_links_app/build/web');
 if (!existsSync(join(root, 'index.html'))) throw new Error('Build the Flutter web example first.');
 const dir = mkdtempSync(join(tmpdir(), 'pocket-mfo-flutter-'));

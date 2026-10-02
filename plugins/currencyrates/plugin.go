@@ -3,12 +3,15 @@ package currencyrates
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 )
@@ -19,6 +22,9 @@ const Collection = "currency_rates"
 const collectionID = "pmfo_curr_rates"
 const jobID = "currencyrates_update"
 const requestTimeout = 15 * time.Second
+
+//go:embed ui/*
+var assets embed.FS
 
 type internalKey struct{}
 
@@ -45,6 +51,7 @@ func Register(app core.App) *Plugin {
 }
 
 func register(app core.App, client *http.Client) *Plugin {
+	adminui.Register(app)
 	const storeKey = "currencyrates.plugin"
 	if existing, ok := app.Store().Get(storeKey).(*Plugin); ok {
 		return existing
@@ -76,6 +83,11 @@ func register(app core.App, client *http.Client) *Plugin {
 	app.OnCollectionUpdate().Bind(&hook.Handler[*core.CollectionEvent]{Id: "currencyrates", Func: protectCollection})
 	app.OnCollectionDelete().Bind(&hook.Handler[*core.CollectionEvent]{Id: "currencyrates", Func: protectCollection})
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{Id: "currencyrates", Func: func(e *core.ServeEvent) error {
+		ui, err := fs.Sub(assets, "ui")
+		if err != nil {
+			return err
+		}
+		e.UIExtensions = append(e.UIExtensions, core.UIExtension{Name: "currencyrates", FS: ui})
 		run := func() {
 			if err := p.Update(context.Background()); err != nil {
 				e.App.Logger().Error("currencyrates: update failed", "error", err)

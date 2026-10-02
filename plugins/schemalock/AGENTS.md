@@ -21,3 +21,5 @@
 Проверки: `go test -race ./plugins/schemalock ./plugins/variants` и `npx playwright test --project=schemalock`. Для каждого нового разрешения проверьте соседние запрещённые методы, а для отказов — отсутствие изменений схемы/настроек/данных. Тесты редакторов без защиты должны оставаться в проекте `plugins` на отдельном стенде.
 
 - Настройки AppMetrica и провайдеров Partner Links через HTTP только читаются; PUT config запрещён, UI получает locks.all. Изменение ссылок сохраняется.
+
+- У общего модуля AppMetrica разрешены только GET/PUT admin/config и POST admin/check и admin/connect для суперпользователя; проверка не пишет во внешние сервисы. Запрет PUT Partner Links сохраняется.

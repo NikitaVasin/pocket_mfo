@@ -5,7 +5,7 @@ const project = `pocket-mfo-smoke-${process.pid}`;
 const port = process.env.POCKETBASE_TEST_PORT || "8098";
 const partnerPort = process.env.DEMO_PARTNER_TEST_PORT || "8096";
 const partnerBase = `http://127.0.0.1:${partnerPort}`;
-const env = { ...process.env, POCKETBASE_PORT: port, DEMO_PARTNER_PORT: partnerPort };
+const env = { ...process.env, DEMO_PARTNER_ENABLED: "1", POCKETBASE_PORT: port, DEMO_PARTNER_PORT: partnerPort };
 const args = ["compose", "-f", "example/compose.yaml", "-p", project];
 const compose = (...command) => execFileSync("docker", [...args, ...command], { env, stdio: "inherit" });
 const base = `http://127.0.0.1:${port}`;

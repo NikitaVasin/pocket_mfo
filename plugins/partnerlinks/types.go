@@ -45,6 +45,7 @@ type ManagedConfig struct {
 }
 
 type Config struct {
+	ProviderCredentials     map[string]string `json:"providerCredentials,omitempty"` // Internal storage; never exposed by the admin API.
 	Version                 int               `json:"version"`
 	BaseURL                 string            `json:"baseUrl"`
 	ApplicationID           int64             `json:"applicationId"`

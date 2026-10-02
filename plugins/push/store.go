@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/pocketbase/pocketbase/tools/security"
@@ -127,6 +128,15 @@ func loadStored(app core.App) (Config, error) {
 func Load(app core.App) (Config, error) {
 	c, err := loadStored(app)
 	overlayManaged(app, &c)
+	if err == nil && appmetrica.Initialized(app) {
+		shared, e := appmetrica.Load(app)
+		if e != nil {
+			return c, e
+		}
+		c.ApplicationID = shared.ApplicationID
+		c.OAuthToken = shared.OAuthToken
+		c.HasOAuthToken = c.OAuthToken != ""
+	}
 	return c, err
 }
 func Configure(app core.App, in Config) (Config, error) {
@@ -141,6 +151,9 @@ func Configure(app core.App, in Config) (Config, error) {
 		}
 		if in.OAuthToken == "" {
 			in.OAuthToken = old.OAuthToken
+		}
+		if appmetrica.Initialized(tx) && (in.ApplicationID != old.ApplicationID || in.OAuthToken != old.OAuthToken) {
+			return textError("Настройки AppMetrica изменяются в общем модуле")
 		}
 		if err := validateConfig(in); err != nil {
 			return err
@@ -174,6 +187,15 @@ func Configure(app core.App, in Config) (Config, error) {
 			stored.OAuthToken = raw.OAuthToken
 			stored.HasOAuthToken = stored.OAuthToken != ""
 		}
+		if appmetrica.Initialized(tx) {
+			raw, err := loadStored(tx)
+			if err != nil {
+				return err
+			}
+			stored.ApplicationID = raw.ApplicationID
+			stored.OAuthToken = raw.OAuthToken
+			stored.HasOAuthToken = raw.OAuthToken != ""
+		}
 		r.Set("definition", stored)
 		if err = save(tx, r); err != nil {
 			return err
@@ -194,6 +216,9 @@ func (p *Plugin) SaveAudience(app core.App, in Audience) (Audience, error) {
 	return in, err
 }
 func (p *Plugin) SaveCampaign(app core.App, in Campaign) (Campaign, error) {
+	if in.SendRate != 0 && (in.SendRate < 100 || in.SendRate > 5000) {
+		return in, textError("Скорость: 0 (по умолчанию) или 100–5000 сообщений в секунду")
+	}
 	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 120 {
 		return in, textError("укажите название кампании")
 	}

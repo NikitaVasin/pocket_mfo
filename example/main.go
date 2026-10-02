@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "github.com/NikitaVasin/pocket_mfo/example/migrations"
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/NikitaVasin/pocket_mfo/plugins/currencyrates"
 	"github.com/NikitaVasin/pocket_mfo/plugins/dynamiclink"
 	"github.com/NikitaVasin/pocket_mfo/plugins/mcp"
@@ -20,22 +21,23 @@ import (
 
 func main() {
 	app := pocketbase.New()
+	applicationID, sendRate := int64(6361870), 1000
+	oauthToken := os.Getenv("APPMETRICA_PUSH_OAUTH_TOKEN")
+	shared := &appmetrica.ManagedConfig{ApplicationID: &applicationID, OAuthToken: &oauthToken}
+	appmetrica.Register(app, appmetrica.Options{Managed: shared})
 	polymorphicrelation.Register(app)
 	variants.Register(app)
 	typedconfig.Register(app)
 	singleton.Register(app)
 	dynamiclink.Register(app)
-	partnerOptions := partnerlinks.Options{AuthCollections: []string{"users"}}
+	partnerOptions := partnerlinks.Options{AuthCollections: []string{"users"}, Managed: &partnerlinks.ManagedConfig{Providers: []partnerlinks.Provider{partnerlinks.RafinadNew("rafinad-new", "")}}}
 	partnerOptions.Attribution = push.Attribution
 	partnerlinks.Register(app, partnerOptions)
 	bridge := mcp.Register(app, mcp.Options{ContentCollections: []string{"demo_offers", "partner_links", "demo_screen_configs", dynamiclink.SettingsCollection}})
-	applicationID, sendRate := int64(6361870), 1000
-	oauthToken := os.Getenv("APPMETRICA_PUSH_OAUTH_TOKEN")
 
 	push.Register(app, push.Options{
-		OAuthClientID:   "8e1f79cf905d4a70b30507ea80e0730f",
 		AuthCollections: []string{"users"}, MCP: bridge,
-		Managed:         &push.ManagedConfig{ApplicationID: &applicationID, OAuthToken: &oauthToken, SendRate: &sendRate},
+		Managed:         &push.ManagedConfig{SendRate: &sendRate},
 		LockAdminConfig: true,
 	})
 	currencyrates.Register(app)

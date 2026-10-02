@@ -75,23 +75,7 @@ app.fieldTypes.dynamicLink = {
 watch(() => app.store.activeCollection?.name === "dynamic_link_settings", active => document.body.classList.toggle("dl-settings-active", !!active));
 
 // Reuse the native Singleton form and Variants toolbar, accessible from the app bar.
-const dlServiceCollection = collection => ["dynamic_link_settings", "partner_links"].includes(collection?.name);
-app.store.headerLinks = [...app.store.headerLinks.map(link => link.href === "#/collections" ? {
-    ...link,
-    isActive: el => link.isActive?.(el) || app.utils.isActivePath("#/collections"),
-    get href() {
-        // Native Collections restores pbLastActiveCollection, which older URLs
-        // may have set to a service collection. Give the header a safe target
-        // even when the user is already on that legacy Collections page.
-        const collections = app.store.collections;
-        const active = app.store.activeCollection;
-        const saved = localStorage.getItem("pbLastActiveCollection");
-        const target = active && !dlServiceCollection(active) ? active :
-            collections.find(c => !dlServiceCollection(c) && [c.id, c.name].includes(saved)) ||
-            collections.find(c => !c.system && !dlServiceCollection(c));
-        return target ? "#/collections?collection=" + encodeURIComponent(target.name) : "#/collections";
-    },
-} : link), { label: "Dynamic Link", href: "#/dynamic-links", icon: "ri-external-link-line" }];
+app.store.headerLinks = [...app.store.headerLinks, { label: "Dynamic Link", href: "#/dynamic-links", icon: "ri-external-link-line" }];
 app.routes.superuserOnly("#/dynamic-links", () => {
     app.store.title = "Dynamic Link";
     const state = store({ filter: app.utils.getHashQueryParams().filter || "" });

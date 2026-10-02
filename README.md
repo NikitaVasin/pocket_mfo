@@ -2,7 +2,9 @@
 
 Набор подключаемых Go-плагинов и общий стенд для их проверки.
 
-**Каталог 1 — v1.0.1.** [Критерии совместимости](docs/COMPATIBILITY.md) · [Изменения выпуска](CHANGELOG.md).
+Коллекции, принадлежащие плагинам, скрыты в боковом списке **Collections**, включая системный раздел, поиск и закреплённые элементы. Прикладные коллекции и штатные системные коллекции PocketBase остаются видимыми. Страницы плагинов, выбор связанных записей и прежние прямые URL сохраняют доступ в рамках серверных правил.
+
+**Каталог 1 — v1.1.0.** [Критерии совместимости](docs/COMPATIBILITY.md) · [Изменения выпуска](CHANGELOG.md).
 
 **Интеграция в приложение с AI-агентом:** [единое руководство](docs/AI_INTEGRATION.md) — обязательное интервью, устройство всех плагинов, подключение Go/Flutter, необходимые ключи и файлы, настройка AppMetrica/Firebase/APNs, постбеков и MCP, проверки и передача результата.
 
@@ -14,6 +16,7 @@
 | [Singleton](plugins/singleton) | Одна запись на коллекцию или набор Variants; включение в админке, форма вместо таблицы |
 | [Dynamic Link](plugins/dynamiclink) | Переиспользуемое поле с URL и настройками WebView/браузера |
 | [Partner Links](plugins/partnerlinks) | Партнёрские ссылки с хранением конверсий, настройки провайдеров, постбеки AppMetrica и Flutter-клиент |
+| [AppMetrica](plugins/appmetrica) | Общие настройки и проверка доступа для событий, пушей и аналитики |
 | [Push](plugins/push) | Устройства, аудитории, черновики кампаний, ручной/отложенный запуск через AppMetrica и атрибуция конверсий |
 | [MCP](plugins/mcp) | Отдельная вкладка ключей, права на инструменты и коллекции, наполнение контента и подключение других плагинов через `Provider` |
 | [Schema Lock](plugins/schemalock) | Схема только из кода; записи, Variants и настройки сервера доступны, системные записи только для чтения, кроме `_superusers` |
@@ -64,6 +67,8 @@ GOTOOLCHAIN=auto go run ./example serve --http=127.0.0.1:8090 --dir=./example/pb
 
 В example также есть `demo_screen_configs → Главная витрина`: редактор типизированных блоков без JSON. [Документация](plugins/typedconfig/README.md).
 
+В Partner Links по умолчанию подключён только пресет **Rafinad New**; секрет постбека генерируется и сохраняется автоматически. Для тестовой ссылки на демопартнёра задайте `DEMO_PARTNER_ENABLED=1` до первого запуска новой базы. Обновление прежнего example удаляет только неизменённый демонстрационный пример, сохраняя пользовательские изменения и историю конверсий.
+
 ## Подключение
 
 Все плагины — пакеты одного Go-модуля. Подключайте только нужные пакеты до `Bootstrap` / `Start`:
@@ -91,10 +96,10 @@ func main() {
 }
 ```
 
-Go module path: `github.com/NikitaVasin/pocket_mfo`. После публикации тега `v1.0.1` в [репозитории](https://github.com/NikitaVasin/pocket_mfo) подключение из другого проекта:
+Go module path: `github.com/NikitaVasin/pocket_mfo`. После публикации тега `v1.1.0` в [репозитории](https://github.com/NikitaVasin/pocket_mfo) подключение из другого проекта:
 
 ```sh
-go get github.com/NikitaVasin/pocket_mfo@v1.0.1
+go get github.com/NikitaVasin/pocket_mfo@v1.1.0
 ```
 
 Для воспроизводимых сборок фиксируйте выбранную версию или commit. Для локальной разработки используйте `replace github.com/NikitaVasin/pocket_mfo => ../pocket_mfo`. Порядок публикации и вариант приватного репозитория описаны в [инструкции](docs/PUBLISHING.md).
@@ -109,6 +114,7 @@ UI встроен в Go-бинарник через `embed.FS`; отдельна
 | [Singleton](plugins/singleton/README.md) | [AGENTS.md](plugins/singleton/AGENTS.md) |
 | [Dynamic Link](plugins/dynamiclink/README.md) | [AGENTS.md](plugins/dynamiclink/AGENTS.md) |
 | [Partner Links](plugins/partnerlinks/README.md) | [AGENTS.md](plugins/partnerlinks/AGENTS.md) |
+| [AppMetrica](plugins/appmetrica/README.md) | [AGENTS.md](plugins/appmetrica/AGENTS.md) |
 | [Push](plugins/push/README.md) | [AGENTS.md](plugins/push/AGENTS.md) |
 | [MCP](plugins/mcp/README.md) | [AGENTS.md](plugins/mcp/AGENTS.md) |
 | [Schema Lock](plugins/schemalock/README.md) | [AGENTS.md](plugins/schemalock/AGENTS.md) |

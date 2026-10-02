@@ -84,6 +84,9 @@ func (p *plugin) resolve(r *core.RequestEvent) error {
 	if err != nil {
 		return r.NotFoundError("Провайдер недоступен", nil)
 	}
+	if prov.Secret == "" {
+		return r.Error(503, "Не задан секрет провайдера", nil)
+	}
 
 	var data clickData
 	var link dynamiclink.Value

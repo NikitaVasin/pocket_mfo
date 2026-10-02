@@ -1,8 +1,11 @@
 package push
 
 import (
+	"database/sql"
+	"errors"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -70,6 +73,11 @@ func checkApplicationChange(app core.App, old, next int64) error {
 	if old == 0 || old == next {
 		return nil
 	}
+	if _, err := app.FindCollectionByNameOrId(DevicesCollection); errors.Is(err, sql.ErrNoRows) {
+		return nil
+	} else if err != nil {
+		return err
+	}
 	var devices, runs int
 	if err := app.DB().NewQuery("SELECT count(*) FROM push_devices").Row(&devices); err != nil {
 		return err
@@ -89,6 +97,12 @@ func checkApplicationChange(app core.App, old, next int64) error {
 // Persist the non-secret application identity so changing code on a subsequent
 // restart cannot silently reassign existing devices to another application.
 func applyManaged(app core.App) error {
+	if appmetrica.Enabled(app) {
+		if m := managed(app); m != nil && m.SendRate != nil && (*m.SendRate < 100 || *m.SendRate > 5000) {
+			return textError("Скорость отправки: 100–5000")
+		}
+		return nil
+	}
 	if managed(app) == nil {
 		return nil
 	}

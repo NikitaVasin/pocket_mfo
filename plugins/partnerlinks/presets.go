@@ -11,7 +11,8 @@ type ProviderPreset struct {
 const PresetRafinadNew = "rafinad_new"
 
 // RafinadNew configures new.rafinad.io. Supply a stable provider ID and a random
-// postback secret (16–1024 bytes). Revenue is opt-in; its amount is the publisher
+// postback secret (16–1024 bytes), or "" to generate and persist it automatically.
+// Revenue is opt-in; its amount is the publisher
 // commission, never the loan/order total. Rafinad dates are not Unix timestamps.
 func RafinadNew(id, secret string) Provider {
 	return Provider{

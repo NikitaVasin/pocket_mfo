@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/NikitaVasin/pocket_mfo/plugins/partnerlinks"
 	_ "github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	_ "github.com/NikitaVasin/pocket_mfo/plugins/typedconfig"
@@ -26,13 +27,26 @@ func main() {
 	}
 	config.BaseURL = "https://links.example.test"
 	config.ApplicationID = 1234
-	config.PostAPIKey = "fake-browser-key"
 	if os.Args[2] == "locked" {
+		config.ApplicationID = 6361870
+	}
+	config.PostAPIKey = "fake-browser-key"
+	{
 		provider := config.Providers[0]
 		provider.ID, provider.Name = "browser-selector", "Другой партнёр"
 		config.Providers = append(config.Providers, provider)
 	}
 	if _, err := partnerlinks.Configure(app, *config); err != nil {
+		log.Fatal(err)
+	}
+	appmetrica.Register(app, appmetrica.Options{})
+	shared, err := appmetrica.Load(app)
+	if err != nil {
+		log.Fatal(err)
+	}
+	shared.ApplicationID = config.ApplicationID
+	shared.PostAPIKey = config.PostAPIKey
+	if _, err = appmetrica.Configure(app, shared); err != nil {
 		log.Fatal(err)
 	}
 }

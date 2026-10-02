@@ -129,6 +129,9 @@ func setupOptions(t *testing.T, locked, collect bool, configuration ...Options) 
 	x.admin, err = admin.NewAuthToken()
 	must(t, err)
 	cfg := DefaultConfig()
+	initial, err := Load(x.app)
+	must(t, err)
+	cfg.Version = initial.Version
 	cfg.BaseURL = "https://links.example"
 	cfg.ApplicationID = 1234
 	cfg.PostAPIKey = "fake-post-api-key"

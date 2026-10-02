@@ -92,6 +92,7 @@ type Message struct {
 	Target string `json:"target,omitempty"`
 }
 type Campaign struct {
+	SendRate           int      `json:"sendRate"` // 0 inherits the code-configured default at launch.
 	AllUsers           bool     `json:"allUsers"` // Explicit opt-in to all connected auth collections.
 	ID                 string   `json:"id,omitempty"`
 	Version            int      `json:"version"`

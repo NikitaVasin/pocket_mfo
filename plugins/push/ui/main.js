@@ -20,7 +20,7 @@ app.components.recordsList = function(props = {}) {
 function pushPage() {
     const control = (props) => t.div({ className: "field" }, t.input(props));
     app.store.title = "Пуши";
-    const blankCampaign = () => ({ version: 0, name: "", allUsers: false, audienceIds: [], excludeAudienceIds: [], lastDeviceOnly: false, cooldownHours: 24, message: { title: "", text: "", action: "app", target: "", image: "" } });
+    const blankCampaign = () => ({ version: 0, name: "", allUsers: false, audienceIds: [], excludeAudienceIds: [], lastDeviceOnly: false, cooldownHours: 24, sendRate: 0, message: { title: "", text: "", action: "app", target: "", image: "" } });
     const s = store({ tab: "Кампании", modalOpen: false, loaded: false, busy: false, error: "", notice: "", data: null, campaign: blankCampaign(), audience: null, dirty: false, preview: null, schedule: "", testDevices: [], launchKey: "", report: null, reportMode: "diagnostics", overview: null, overviewLoading: false, overviewError: "", overviewFrom: new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10), overviewTo: new Date().toISOString().slice(0, 10), overviewMetric: "revenue", hiddenCampaigns: [], analytics: null, analyticsScope: "run", analyticsLoading: false, analyticsError: "", links: [], linksLoaded: false, linksLoading: false, linksError: "", coverage: null, coverageLoading: false, coverageError: "" });
     let nextID = 0;
     let activeModal = null;
@@ -255,6 +255,7 @@ function pushPage() {
                 field("При нажатии", s.campaign.message, "action", { choices: [["app", "Открыть приложение"], ["route", "Открыть экран"], ["partner", "Открыть партнёрское предложение"]] }),
                 () => s.campaign.message.action === "partner" ? partnerSelect() : s.campaign.message.action === "route" ? field("Маршрут", s.campaign.message, "target", { hint: "Например, /offers. Экран откроется внутри приложения." }) : null,
                 recipients(), s.data.audiences.length ? multi("Исключить аудитории", s.data.audiences, s.campaign, "excludeAudienceIds") : null,
+                field("Скорость отправки в секунду", s.campaign, "sendRate", { number: true, min: 0, max: 5000, hint: `0 — по умолчанию (${s.data.config.sendRate}). Своё значение: от 100 до 5000.` }),
                 check("Только последнее активное устройство пользователя", s.campaign, "lastDeviceOnly"), field("Минимальный интервал между рассылками, часов", s.campaign, "cooldownHours", { number: true, min: 0, max: 8760 }),
                 t.div({ className: "push-actions" }, button("Проверить аудиторию", async () => { s.preview = await api("preview", { campaignId: s.campaign.id }); }, false, () => !s.campaign.id || s.dirty)), preview(),
                 t.div({ className: "push-launch" }, t.h3(null, "Запуск сохранённой кампании"), t.p({ className: "push-readiness", ariaLive: "polite" }, launchHint),
@@ -265,7 +266,7 @@ function pushPage() {
     function launchHint() {
         if (!s.campaign.id) return "Сначала сохраните кампанию. Сохранение не запускает отправку.";
         if (s.dirty) return "Сохраните изменения перед отправкой.";
-        if (!s.data.config.hasOAuthToken) return "Для отправки заполните AppMetrica на вкладке «Настройки». Аудиторию можно проверить заранее.";
+        if (!s.data.config.hasOAuthToken) return "Для отправки заполните подключение на вкладке «AppMetrica». Аудиторию можно проверить заранее.";
         if (!s.preview) return "Нажмите «Проверить аудиторию», чтобы увидеть число получателей.";
         if (!s.preview.devices) return "В аудитории нет доступных устройств. Измените условия или дождитесь регистрации устройств.";
         return `Готово к запуску: ${s.preview.users} пользователей · ${s.preview.devices} устройств. Каждый запуск сохраняется в истории.`;
@@ -486,26 +487,10 @@ function pushPage() {
         return t.div({ className: "push-chart-frame" }, svg);
     }
     function settings() {
-        const locks = s.data.configLocks || { all: false, fields: [] };
-        const locked = key => locks.all || locks.fields.includes(key);
-        const allLocked = ["applicationId", "sendRate", "oauthToken"].every(locked);
-        const tokenHint = locked("oauthToken")
-            ? (s.data.config.hasOAuthToken ? "Токен задан сервером. Значение скрыто." : "Токен не задан. Настройте его на сервере и перезапустите сервер.")
-            : (s.data.config.hasOAuthToken ? "Токен сохранён. Пустое поле сохраняет текущий." : "Серверный токен AppMetrica с доступом к приложению.");
-        return t.section(null, t.h2(null, "AppMetrica Push"),
-            locks.all || locks.fields.length ? t.p({ className: "txt-hint" }, allLocked ? "Настройки закреплены в Go-коде. Изменение доступно только на сервере." : "Часть настроек закреплена в Go-коде и недоступна для изменения.") : null,
-            t.div({ className: "push-grid" },
-                field("Application ID", s.data.config, "applicationId", { number: true, disabled: locked("applicationId") }),
-                field("Скорость отправки в секунду", s.data.config, "sendRate", { number: true, min: 100, max: 5000, disabled: locked("sendRate") })),
-            s.data.oauthClientId ? t.div(null,
-                field("OAuth ClientID", s.data, "oauthClientId", { disabled: true, hint: "Идентификатор OAuth-приложения Яндекс ID. Закреплён в Go-коде." }),
-                t.p(null, t.a({ href: `https://oauth.yandex.ru/authorize?response_type=token&client_id=${encodeURIComponent(s.data.oauthClientId)}`, target: "_blank", rel: "noopener noreferrer" }, "Получить OAuth-токен ↗")),
-                t.p({ className: "txt-hint" }, "Войдите в Яндекс под аккаунтом с доступом к приложению AppMetrica. Полученный токен задайте на сервере в APPMETRICA_PUSH_OAUTH_TOKEN. Client secret для этого способа не требуется.")) : null,
-            field("OAuth token", s.data.config, "oauthToken", { type: "password", disabled: locked("oauthToken"), hint: tokenHint }),
-            allLocked ? null : button("Сохранить настройки", async () => {
-                await app.pb.send("/api/push/admin/config", { method: "PUT", body: s.data.config, requestKey: null });
-                await load(); s.notice = "Настройки сохранены.";
-            }, true));
+        return t.section(null, t.h2(null, "Настройки отправки"),
+            t.p({ role: "status" }, `✓ Скорость по умолчанию: ${s.data.config.sendRate} сообщений в секунду. Задана кодом проекта.`),
+            t.p({ className: "txt-hint" }, "В каждой кампании можно переопределить скорость. Изменение кампании не меняет уже запланированные отправки."),
+            s.data.sharedAppMetrica ? t.p(null, t.a({ href: "#/appmetrica" }, "Настройки и проверка AppMetrica →")) : t.p(null, "Подключите общий модуль AppMetrica в коде проекта."));
     }
     run(load);
     const root = t.div({ className: "push-page", onunmount: () => { if (activeModal) app.modals.close(activeModal, true); clearTimeout(coverageTimer); coverageRevision++; overviewRevision++; analyticsRevision++; coverageWatcher.unwatch(); } }, t.div({ inert: () => s.modalOpen }, t.header(null, t.h1(null, "Пуши"), t.p(null, "Подготовьте сообщение, выберите аудиторию и запустите рассылку.")),

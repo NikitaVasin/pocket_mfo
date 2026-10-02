@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 )
@@ -15,6 +16,8 @@ var assets embed.FS
 // Register enables the field editor and user-specific response policies.
 // For independent use, call Register before Bootstrap/Start.
 func Register(app core.App) {
+	adminui.Register(app)
+	app.Store().Set(registeredStoreKey, true)
 	app.OnRecordDeleteRequest().Bind(&hook.Handler[*core.RecordRequestEvent]{Id: Type, Func: func(e *core.RecordRequestEvent) error {
 		if e.Collection.Name == SettingsCollection {
 			return e.ForbiddenError("Общие настройки Dynamic Link нельзя удалять.", nil)

@@ -3,6 +3,7 @@ package migrations
 import (
 	"database/sql"
 	"errors"
+	"os"
 
 	"github.com/NikitaVasin/pocket_mfo/plugins/partnerlinks"
 	"github.com/pocketbase/pocketbase/core"
@@ -13,6 +14,9 @@ func init() { migrations.Register(ensureDemoPartnerLinks, func(core.App) error {
 
 // Demo credentials are public. No AppMetrica key is seeded.
 func ensureDemoPartnerLinks(app core.App) error {
+	if os.Getenv("DEMO_PARTNER_ENABLED") != "1" {
+		return nil
+	}
 	return app.RunInTransaction(func(tx core.App) error {
 		links, err := tx.FindCollectionByNameOrId(partnerlinks.LinksCollection)
 		if err != nil {
@@ -34,7 +38,7 @@ func ensureDemoPartnerLinks(app core.App) error {
 			}
 		}
 		if !found {
-			cfg.Providers = append(cfg.Providers, partnerlinks.Provider{ID: "demo", Name: "Демонстрационный партнёр", URLTemplate: "{url}?subid={clickData}", Secret: "public-demo-postback-secret", SecretLocation: "query", SecretName: "secret", Fields: partnerlinks.PostbackFields{Token: "subid", Status: "status", LeadID: "lead_id"}, Statuses: map[string]string{"lead": "lead", "approved": "approved", "hold": "hold", "rejected": "rejected"}, ExtraFields: map[string]string{}})
+			cfg.Providers = append(cfg.Providers, legacyDemoProvider())
 			if _, err = partnerlinks.Configure(tx, *cfg); err != nil {
 				return err
 			}
@@ -47,4 +51,19 @@ func ensureDemoPartnerLinks(app core.App) error {
 		r.Set("active", true)
 		return tx.Save(r)
 	})
+}
+
+// Single definition shared by seeding and conservative legacy cleanup.
+func legacyDemoProvider() partnerlinks.Provider {
+	return partnerlinks.Provider{
+		ID:             "demo",
+		Name:           "Демонстрационный партнёр",
+		URLTemplate:    "{url}?subid={clickData}",
+		Secret:         "public-demo-postback-secret",
+		SecretLocation: "query",
+		SecretName:     "secret",
+		Fields:         partnerlinks.PostbackFields{Token: "subid", Status: "status", LeadID: "lead_id"},
+		Statuses:       map[string]string{"lead": "lead", "approved": "approved", "hold": "hold", "rejected": "rejected"},
+		ExtraFields:    map[string]string{},
+	}
 }

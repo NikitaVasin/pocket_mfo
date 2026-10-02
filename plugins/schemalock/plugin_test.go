@@ -86,7 +86,7 @@ func setup(t *testing.T, lockFirst bool) *fixture {
 	router.POST("/api/custom-schema", func(e *core.RequestEvent) error { t.Error("forbidden handler executed"); return e.NoContent(204) })
 	se := &core.ServeEvent{App: a, Router: router}
 	must(t, a.OnServe().Trigger(se, func(e *core.ServeEvent) error { return nil }))
-	if len(se.UIExtensions) != 4 || se.UIExtensions[3].Name != "schemalock" {
+	if len(se.UIExtensions) != 5 || se.UIExtensions[0].Name != "pocket-mfo-admin" || se.UIExtensions[4].Name != "schemalock" {
 		t.Fatalf("extension order: %+v", se.UIExtensions)
 	}
 	h, err := router.BuildMux()

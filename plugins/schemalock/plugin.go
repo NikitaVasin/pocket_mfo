@@ -90,6 +90,7 @@ func allowed(r *http.Request) bool {
 		"GET /api/variants/admin/users/{auth}/{id}", "GET /api/variants/admin/users/{auth}/{id}/history",
 		"GET /api/variants/admin/collections/{collection}", "PUT /api/variants/admin/collections/{collection}",
 		"GET /api/partnerlinks/admin/config",
+		"GET /api/appmetrica/admin/config", "PUT /api/appmetrica/admin/config", "POST /api/appmetrica/admin/check", "POST /api/appmetrica/admin/connect",
 		"POST /api/partnerlinks/links/{id}/resolve", "GET /api/partnerlinks/r/{token}",
 		"GET /api/partnerlinks/postbacks/{provider}", "POST /api/partnerlinks/postbacks/{provider}",
 		"GET /api/singleton/admin/collections/{collection}":

@@ -45,6 +45,17 @@ select option:disabled, select optgroup:disabled, select optgroup:disabled optio
 .pl-examples pre code { white-space: inherit; }
 .pl-guide ol { padding-left: 24px; }
 .pl-guide li + li { margin-top: 12px; }
+.pl-postback-guide { overflow-wrap: anywhere; }
+.pl-postback-guide > summary { min-height: 44px; align-content: center; }
+.pl-postback-guide > summary:focus-visible { outline: 2px solid var(--primaryColor); outline-offset: 4px; }
+.pl-postback-guide h3 { margin: 8px 0 0; }
+.pl-postback-guide .pl-endpoint .btn { align-self: flex-start; min-height: 44px; }
+.pl-postback-guide ol { margin: 0; padding-left: 24px; }
+.pl-postback-guide li + li { margin-top: 12px; }
+.pl-guide-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.pl-guide-table th, .pl-guide-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--surfaceAlt2Color); overflow-wrap: anywhere; }
+.pl-guide-table th { background: var(--surfaceAlt1Color); font-weight: 600; }
+.pl-guide-table code { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
     .pl-panel { padding: 16px; }
     .pl-mapping-row { grid-template-columns: minmax(0, 1fr) 44px; padding-bottom: 16px; border-bottom: 1px solid var(--surfaceAlt2Color); }
@@ -77,7 +88,4 @@ fieldset.pl-provider-body { min-width: 0; margin: 0; padding: 0; border: 0; }
 .pl-link-url { font-size: 0.9em; }
 .pl-link-pagination { font-variant-numeric: tabular-nums; }
 
-/* Keep collections available to native record forms and relation pickers. */
-.collections-sidebar .nav-item[title="partner_links"] { display: none !important; }
-
-.pl-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+.pl-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }

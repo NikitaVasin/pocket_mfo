@@ -2,14 +2,19 @@ package partnerlinks
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -26,6 +31,15 @@ func Load(app core.App) (*Config, error) {
 	c, err := loadStored(app)
 	if err == nil {
 		overlayManaged(c, managed(app))
+	}
+	if err == nil && appmetrica.Initialized(app) {
+		shared, e := appmetrica.Load(app)
+		if e != nil {
+			return nil, e
+		}
+		c.ApplicationID = shared.ApplicationID
+		c.PostAPIKey = shared.PostAPIKey
+		c.EventNames = shared.EventNames
 	}
 	return c, err
 }
@@ -50,9 +64,32 @@ func loadStored(app core.App) (*Config, error) {
 	return &c, nil
 }
 
-// Configure atomically replaces settings, preserving omitted secrets. Version
-// must match Load; stale writes fail. Schema and rules cannot be changed here.
+// Configure atomically replaces settings, preserving existing secrets and
+// generating missing ones. Version must match Load; stale writes fail. Schema and rules cannot be changed here.
 func Configure(app core.App, c Config) (*Config, error) {
+	return configure(app, c, false)
+}
+
+// ensureProviderSecrets initializes missing credentials once, in the same
+// transaction as configuration validation. Reads never generate or rotate keys.
+func ensureProviderSecrets(app core.App) error {
+	return app.RunInTransaction(func(tx core.App) error {
+		c, err := Load(tx)
+		if err != nil {
+			return err
+		}
+		for _, p := range c.Providers {
+			if p.Secret == "" {
+				_, err = Configure(tx, *c)
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// configure applies HTTP restrictions inside the same transaction as the write.
+func configure(app core.App, c Config, fromAdmin bool) (*Config, error) {
 	// Detach maps/slices so secret preservation never mutates caller-owned state.
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -85,7 +122,25 @@ func Configure(app core.App, c Config) (*Config, error) {
 					p.Secret = previous.Secret
 				}
 			}
+			if p.Secret == "" {
+				var secret [32]byte
+				if _, err := rand.Read(secret[:]); err != nil {
+					return fmt.Errorf("partnerlinks: generate postback secret: %w", err)
+				}
+				p.Secret = base64.RawURLEncoding.EncodeToString(secret[:])
+			}
 			p.HasSecret = false
+		}
+		if appmetrica.Initialized(tx) && (c.ApplicationID != old.ApplicationID || c.PostAPIKey != old.PostAPIKey || !reflect.DeepEqual(c.EventNames, old.EventNames)) {
+			return fmt.Errorf("Настройки AppMetrica изменяются в общем модуле")
+		}
+		if fromAdmin {
+			if len(c.ProviderCredentials) > 0 {
+				return fmt.Errorf("Служебные параметры недоступны")
+			}
+			if err = checkAdminConfig(&c, old); err != nil {
+				return err
+			}
 		}
 		if err = validateConfig(&c); err != nil {
 			return err
@@ -116,7 +171,13 @@ func Configure(app core.App, c Config) (*Config, error) {
 			return err
 		}
 		c.Version++
-		r.Set("definition", storedConfig(c, raw, managed(tx)))
+		stored := storedConfig(c, raw, managed(tx))
+		if appmetrica.Initialized(tx) {
+			stored.ApplicationID = raw.ApplicationID
+			stored.PostAPIKey = raw.PostAPIKey
+			stored.EventNames = raw.EventNames
+		}
+		r.Set("definition", stored)
 		return save(tx, r)
 	})
 	if err != nil {
@@ -126,6 +187,8 @@ func Configure(app core.App, c Config) (*Config, error) {
 }
 
 func redacted(c Config) Config {
+	c.Providers = slices.Clone(c.Providers)
+	c.ProviderCredentials = nil
 	// Only the dedicated superuser API exposes partner secrets. The AppMetrica
 	// Post API key remains write-only in the administrative interface.
 	c.HasPostAPIKey = c.PostAPIKey != ""
@@ -230,7 +293,7 @@ func validateConfig(c *Config) error {
 			return fmt.Errorf("partnerlinks: provider needs a unique stable ID and name")
 		}
 		ids[p.ID] = true
-		if len(p.Secret) < 16 || len(p.Secret) > 1024 {
+		if (p.Secret != "" || p.Preset == "") && (len(p.Secret) < 16 || len(p.Secret) > 1024) {
 			return fmt.Errorf("partnerlinks: provider secret must contain 16–1024 bytes")
 		}
 		if p.SecretLocation != "header" && p.SecretLocation != "query" && p.SecretLocation != "body" {
@@ -272,7 +335,7 @@ func validateConfig(c *Config) error {
 				return fmt.Errorf("partnerlinks: invalid field path or secret mapped as event data")
 			}
 		}
-		if strings.Contains(p.URLTemplate, p.Secret) {
+		if p.Secret != "" && strings.Contains(p.URLTemplate, p.Secret) {
 			return fmt.Errorf("partnerlinks: secret must not appear in the public URL")
 		}
 		if _, err := renderURL(&p, "https://partner.example/offer?existing=1", "testClickData"); err != nil {

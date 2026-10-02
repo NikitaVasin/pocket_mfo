@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/NikitaVasin/pocket_mfo/plugins/mcp"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -23,8 +25,25 @@ func Register(app core.App, options Options) *Plugin {
 	return register(app, options, &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }})
 }
 func register(app core.App, options Options, client *http.Client) *Plugin {
+	adminui.Register(app)
 	options.AuthCollections = slices.Clone(options.AuthCollections)
 	setManaged(app, options.Managed)
+	appmetrica.RegisterLegacySource(app, "push", func(a core.App) (appmetrica.Config, error) {
+		c, err := loadStored(a)
+		if err != nil {
+			return appmetrica.Config{}, err
+		}
+		previousID := c.ApplicationID
+		overlayManaged(a, &c)
+		// The first shared migration has no canonical identity yet. Validate
+		// against the stored consumer ID before the overlay hides it.
+		if err := checkApplicationChange(a, previousID, c.ApplicationID); err != nil {
+			return appmetrica.Config{}, err
+		}
+		return appmetrica.Config{ApplicationID: c.ApplicationID, OAuthToken: c.OAuthToken, OAuthClientID: options.OAuthClientID}, nil
+	})
+	appmetrica.GuardApplicationChange(app, "push", checkApplicationChange)
+
 	app.Store().Set(adminLockStoreKey, options.LockAdminConfig)
 	p := &Plugin{app: app, options: options, client: client, analyticsGate: make(chan struct{}, 1), analyticsCache: map[string]analyticsCacheEntry{}, overviewCache: map[string]AnalyticsOverview{}}
 	lifetime, stop := context.WithCancel(context.Background())
@@ -80,6 +99,13 @@ func register(app core.App, options Options, client *http.Client) *Plugin {
 			var c Config
 			if err := mcp.Decode(r.Request.Body, &c); err != nil {
 				return r.BadRequestError("Некорректные настройки", nil)
+			}
+			old, err := Load(r.App)
+			if err != nil {
+				return err
+			}
+			if c.SendRate != old.SendRate {
+				return r.BadRequestError("Скорость по умолчанию задаётся кодом; переопределите её в кампании", nil)
 			}
 			result, err := Configure(r.App, c)
 			if err != nil {
@@ -168,7 +194,7 @@ func (p *Plugin) state(app core.App) (map[string]any, error) {
 	for _, d := range devices {
 		dd = append(dd, map[string]any{"id": d.Id, "userId": d.GetString("userId"), "platform": d.GetString("platform"), "language": d.GetString("language"), "appVersion": d.GetString("appVersion"), "enabled": d.GetBool("enabled"), "notificationPermission": d.GetString("notificationPermission"), "lastSeen": d.GetString("lastSeen")})
 	}
-	return map[string]any{"config": c, "configLocks": settingsLocks(app), "oauthClientId": p.options.OAuthClientID, "audiences": a, "campaigns": campaigns, "runs": runs, "devices": dd, "fields": p.AudienceFields(app), "authCollections": p.options.AuthCollections}, nil
+	return map[string]any{"sharedAppMetrica": appmetrica.Enabled(app), "config": c, "configLocks": settingsLocks(app), "oauthClientId": p.options.OAuthClientID, "audiences": a, "campaigns": campaigns, "runs": runs, "devices": dd, "fields": p.AudienceFields(app), "authCollections": p.options.AuthCollections}, nil
 }
 func (p *Plugin) call(ctx context.Context, app core.App, action string, args json.RawMessage) (any, error) {
 	if err := ctx.Err(); err != nil {
@@ -286,7 +312,7 @@ func (p *Plugin) MCPTools() []mcp.Tool {
 	num := map[string]any{"type": "integer"}
 	ids := map[string]any{"type": "array", "items": str}
 	audience := mcp.Object(map[string]any{"id": str, "version": num, "name": str, "authCollection": str, "condition": map[string]any{"type": "object"}, "userIds": ids, "excludeUserIds": ids, "deviceIds": ids}, "name", "authCollection", "version")
-	campaign := mcp.Object(map[string]any{"id": str, "version": num, "name": str, "audienceIds": ids, "allUsers": map[string]any{"type": "boolean", "description": "true: все пользователи подключённых auth-коллекций; audienceIds должен быть пустым. По умолчанию false."}, "excludeAudienceIds": ids, "lastDeviceOnly": map[string]any{"type": "boolean"}, "cooldownHours": num, "message": mcp.Object(map[string]any{"title": str, "text": str, "image": str, "action": map[string]any{"type": "string", "enum": []string{"app", "route", "partner"}}, "target": str}, "title", "text", "action")}, "name", "version", "message")
+	campaign := mcp.Object(map[string]any{"id": str, "version": num, "name": str, "audienceIds": ids, "allUsers": map[string]any{"type": "boolean", "description": "true: все пользователи подключённых auth-коллекций; audienceIds должен быть пустым. По умолчанию false."}, "excludeAudienceIds": ids, "lastDeviceOnly": map[string]any{"type": "boolean"}, "cooldownHours": num, "sendRate": map[string]any{"type": "integer", "description": "0: скорость из кода; 100–5000: скорость этой кампании"}, "message": mcp.Object(map[string]any{"title": str, "text": str, "image": str, "action": map[string]any{"type": "string", "enum": []string{"app", "route", "partner"}}, "target": str}, "title", "text", "action")}, "name", "version", "message")
 	launch := mcp.Object(map[string]any{"campaignId": str, "version": num, "idempotencyKey": str, "scheduledAt": str}, "campaignId", "version", "idempotencyKey")
 	test := mcp.Object(map[string]any{"campaignId": str, "version": num, "idempotencyKey": str, "testDeviceIds": ids}, "campaignId", "version", "idempotencyKey", "testDeviceIds")
 	result := []mcp.Tool{}

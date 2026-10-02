@@ -37,9 +37,6 @@ select option:disabled, select optgroup:disabled, select optgroup:disabled optio
 
 .dl-settings-page > .ps-record-form, .dl-settings-page > .ps-search-host, .dl-settings-page > p { width: 100%; max-width: 1000px; align-self: center; }
 
-/* Keep collections available to native record forms and relation pickers. */
-.collections-sidebar .nav-item[title="dynamic_link_settings"] { display: none !important; }
-
 .dl-settings-active .ps-record-form .btn.danger { display: none !important; }
 
 .dl-policy-input .dl-switch input.switch {

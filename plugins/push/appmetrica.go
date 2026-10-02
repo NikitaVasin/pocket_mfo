@@ -1,114 +1,21 @@
 package push
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
-	"unicode"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/pocketbase/pocketbase/core"
 )
 
-const pushHost = "https://push.api.appmetrica.yandex.net"
+type remoteError = appmetrica.RemoteError
 
-type remoteError struct {
-	status  int
-	message string
-}
+var diagnostic = appmetrica.Diagnostic
 
-func (e *remoteError) Error() string {
-	message := fmt.Sprintf("AppMetrica HTTP %d", e.status)
-	if e.message != "" {
-		message += ": " + e.message
-	}
-	return message
-}
-
-// Only diagnostic fields are retained; response bodies and credentials are not stored.
-func providerErrors(data []byte) string {
-	var envelope struct {
-		Errors  []json.RawMessage `json:"errors"`
-		Message string            `json:"message"`
-	}
-	if json.Unmarshal(data, &envelope) != nil {
-		return ""
-	}
-	messages := []string{}
-	for _, raw := range envelope.Errors {
-		var message string
-		if json.Unmarshal(raw, &message) != nil {
-			var detail struct {
-				Message   string `json:"message"`
-				ErrorType string `json:"error_type"`
-			}
-			if json.Unmarshal(raw, &detail) != nil {
-				continue
-			}
-			message = detail.Message
-			if detail.ErrorType != "" {
-				message = detail.ErrorType + ": " + message
-			}
-		}
-		if strings.TrimSpace(message) != "" {
-			messages = append(messages, message)
-		}
-	}
-	if len(messages) == 0 && envelope.Message != "" {
-		messages = append(messages, envelope.Message)
-	}
-	return strings.Join(messages, "; ")
-}
-func diagnostic(message string, secrets ...string) string {
-	for _, value := range secrets {
-		if value != "" {
-			message = strings.ReplaceAll(message, value, "[скрыто]")
-		}
-	}
-	message = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return ' '
-		}
-		return r
-	}, message)
-	chars := []rune(strings.TrimSpace(message))
-	if len(chars) > 2000 {
-		return string(chars[:2000]) + "…"
-	}
-	return string(chars)
-}
 func (p *Plugin) request(ctx context.Context, c Config, method, path string, body, out any, secrets ...string) error {
-	var data []byte
-	var err error
-	if body != nil {
-		data, err = json.Marshal(body)
-		if err != nil {
-			return err
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, method, pushHost+path, bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "OAuth "+c.OAuthToken)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return textError("AppMetrica недоступна")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
-		return &remoteError{status: resp.StatusCode, message: diagnostic(providerErrors(data), append(secrets, c.OAuthToken)...)}
-	}
-	if err = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(out); err != nil {
-		return textError("некорректный ответ AppMetrica")
-	}
-	return nil
+	return appmetrica.PushRequest(ctx, p.client, c.OAuthToken, method, path, body, out, secrets...)
 }
 func (p *Plugin) ensureGroup(ctx context.Context, c Config, d runDefinition, runID string) (int64, error) {
 	name := "PocketBase " + d.Campaign.ID + " / " + runID

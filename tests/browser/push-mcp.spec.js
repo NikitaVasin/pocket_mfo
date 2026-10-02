@@ -243,43 +243,20 @@ test('audience coverage updates automatically and discards stale responses', asy
     }
 });
 
-test("Push settings pinned by server code are read-only", async ({ page }, testInfo) => {
-    await page.goto("/_/");
-    await page.waitForFunction(() => window.app?.store?._ready);
-    await page.evaluate(async () => {
-        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
-        await app.store.loadCollections();
-        location.hash = "#/push";
+test("Push uses code default and campaign rate override", async ({ page }, testInfo) => {
+    await openPlugin(page, '#/push');
+    const push = page.locator('.push-page'); await push.getByRole('button', { name: 'Настройки', exact: true }).click();
+    await expect(push).toContainText('Скорость по умолчанию: 1000');
+    for (const label of ['Application ID', 'OAuth token', 'Скорость отправки в секунду']) await expect(push.getByLabel(label, { exact: true })).toHaveCount(0);
+    await expect(push.getByRole('link', { name: 'Настройки и проверка AppMetrica →' })).toBeVisible();
+    for (const theme of ['light','dark']) { await page.evaluate(theme => app.store.userColorScheme = theme, theme); await push.screenshot({ path: testInfo.outputPath(`push-settings-${theme}.png`) }); }
+    const saved = await page.evaluate(async () => {
+        const campaign = await app.pb.send('/api/push/admin/campaign_save', { method: 'POST', body: { name: 'Rate override', allUsers: true, sendRate: 750, message: { title: 'Title', text: 'Text', action: 'app' } } });
+        const state = await app.pb.send('/api/push/admin/state');
+        await app.pb.send('/api/push/admin/campaign_delete', { method: 'POST', body: { id: campaign.id, version: campaign.version } });
+        return state.campaigns.find(c => c.id === campaign.id);
     });
-    const push = page.locator(".push-page");
-    await push.getByRole("button", { name: "Настройки", exact: true }).click();
-    const locked = testInfo.project.name === "schemalock";
-    for (const label of ["Application ID", "Скорость отправки в секунду", "OAuth token"]) {
-        const input = push.getByLabel(label, { exact: true });
-        if (locked) await expect(input).toBeDisabled();
-        else await expect(input).toBeEnabled();
-    }
-    if (locked) {
-        await expect(push.getByLabel("Application ID", { exact: true })).toHaveValue("6361870");
-        await expect(push.getByLabel("OAuth ClientID", { exact: true })).toHaveValue("8e1f79cf905d4a70b30507ea80e0730f");
-        await expect(push.getByLabel("OAuth ClientID", { exact: true })).toBeDisabled();
-        await expect(push.getByRole("link", { name: "Получить OAuth-токен ↗" })).toHaveAttribute("href", "https://oauth.yandex.ru/authorize?response_type=token&client_id=8e1f79cf905d4a70b30507ea80e0730f");
-        await expect(push).toContainText("Настройки закреплены в Go-коде");
-        await expect(push.getByRole("button", { name: "Сохранить настройки", exact: true })).toHaveCount(0);
-        const status = await page.evaluate(async () => {
-            try {
-                await app.pb.send("/api/push/admin/config", { method: "PUT", body: { applicationId: 1, sendRate: 1000 }, requestKey: null });
-                return 200;
-            } catch (error) { return error.status; }
-        });
-        expect(status).toBe(403);
-    } else {
-        await expect(push.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeEnabled();
-    }
-    for (const theme of ["light", "dark"]) {
-        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
-        await page.screenshot({ path: `test-results/push-settings-${testInfo.project.name}-${theme}.png`, fullPage: true });
-    }
+    expect(saved.sendRate).toBe(750);
 });
 
 test('campaign can target everyone without an audience and preserves recipient mode', async ({ page }, testInfo) => {
@@ -428,7 +405,7 @@ test('campaign cards use native side panels and protect unsaved edits', async ({
     expect(errors).toEqual([]);
 });
 
-test('push devices appear in native system collections with permission and read-only records', async ({ page }, testInfo) => {
+test('push devices stay hidden in navigation and retain read-only record access', async ({ page }, testInfo) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await openPlugin(page, '#/push');
@@ -446,7 +423,7 @@ test('push devices appear in native system collections with permission and read-
     expect(collection.system).toBe(true);
     expect(collection.fields).toContain('notificationPermission');
     await expect(page.locator('body')).toHaveClass(/push-devices-active/);
-    await expect(page.locator('.collections-sidebar').getByText('push_devices', { exact: true })).toBeVisible();
+    await expect(page.locator('.collections-sidebar').getByText('push_devices', { exact: true })).toBeHidden();
     await expect(page.locator('.new-record-btn:visible')).toHaveCount(0);
     for (const theme of ['light', 'dark']) {
         await page.evaluate(theme => app.store.userColorScheme = theme, theme);
@@ -668,10 +645,9 @@ for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
             await page.getByRole('button', { name: 'Обзор', exact: true }).click();
             select = page.getByLabel('Показатель графика', { exact: true });
         } else if (plugin === 'partnerlinks') {
-            await openPlugin(page, '#/partner-links?tab=settings');
-            if (testInfo.project.name === 'schemalock') await page.locator('.pl-provider').last().locator(':scope > summary').click();
-            else await page.getByRole('button', { name: 'Добавить провайдера', exact: true }).click();
-            select = page.locator('.pl-provider').last().getByLabel('Где передавать секрет', { exact: true });
+            await openPlugin(page, '#/partner-links');
+            await page.getByRole('button', { name: 'Добавить ссылку', exact: true }).click();
+            select = page.locator('.pl-provider-input').getByLabel('provider', { exact: true });
         } else {
             await openPlugin(page, '#/dynamic-links');
             select = page.getByLabel('Режим открытия', { exact: true });
@@ -716,9 +692,7 @@ for (const plugin of ['push', 'partnerlinks', 'dynamicLink']) {
                 }
             }
         }
-        if (plugin === 'partnerlinks' && testInfo.project.name === 'schemalock') {
-            await expect(select).toBeDisabled();
-        } else {
+        {
             const label = await select.locator('..').locator('.select-option:not(.active)').first().textContent();
             await selectChoice(select, label.trim());
             await expect(select).toContainText(label.trim());

@@ -3,20 +3,16 @@ package push
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 )
-
-const analyticsHost = "https://api.appmetrica.yandex.com/stat/v1/data"
 
 type AnalyticsInput struct {
 	RunID string `json:"runId"`
@@ -239,30 +235,8 @@ func (p *Plugin) queryAnalytics(ctx context.Context, cfg Config, base url.Values
 	if dimensions != "" {
 		params.Set("dimensions", dimensions)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, analyticsHost+"?"+params.Encode(), nil)
-	if err != nil {
-		return out, textError("не удалось подготовить запрос AppMetrica")
-	}
-	req.Header.Set("Authorization", "OAuth "+cfg.OAuthToken)
-	response, err := p.client.Do(req)
-	if err != nil {
-		return out, textError("AppMetrica недоступна или истекло время ожидания")
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		hint := "повторите позже"
-		switch response.StatusCode {
-		case 401, 403:
-			hint = "проверьте права OAuth-токена на чтение статистики приложения"
-		case 429:
-			hint = "исчерпана квота API, повторите позже"
-		}
-		// Never forward raw provider responses or URLs: they may contain credentials or payloads.
-		return out, fmt.Errorf("AppMetrica HTTP %d: %s", response.StatusCode, hint)
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
-	if err != nil || len(body) > 1<<20 || json.Unmarshal(body, &out) != nil {
-		return out, textError("некорректный ответ аналитики AppMetrica")
+	if err := appmetrica.ReadAnalytics(ctx, p.client, cfg.OAuthToken, params, &out); err != nil {
+		return out, err
 	}
 	valid := func(values []*float64) bool {
 		if len(values) != size {

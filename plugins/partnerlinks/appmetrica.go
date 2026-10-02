@@ -4,18 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"net/url"
 	"strconv"
 	"time"
 )
 
-const appMetricaURL = "https://api.appmetrica.yandex.ru/logs/v1/import/events"
+const appMetricaURL = appmetrica.EventsURL
 
-type deliveryHTTPError int
-
-func (e deliveryHTTPError) Error() string { return fmt.Sprintf("appmetrica: HTTP %d", int(e)) }
+type deliveryHTTPError = appmetrica.DeliveryHTTPError
 
 func (p *plugin) send(parent context.Context, c *Config, data clickData, event string, timestamp int64, conversion *conversionData) error {
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
@@ -33,20 +30,7 @@ func (p *plugin) send(parent context.Context, c *Config, data clickData, event s
 }
 
 func (p *plugin) deliver(ctx context.Context, endpoint string, q url.Values) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"?"+q.Encode(), nil)
-	if err != nil {
-		return fmt.Errorf("appmetrica: invalid request")
-	}
-	response, err := p.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("appmetrica: transport failure")
-	}
-	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-	if response.StatusCode != http.StatusOK {
-		return deliveryHTTPError(response.StatusCode)
-	}
-	return nil
+	return appmetrica.Deliver(ctx, p.client, endpoint, q)
 }
 
 func (p *plugin) sendRevenue(parent context.Context, c *Config, data clickData, timestamp int64, conversion conversionData) error {
@@ -66,7 +50,7 @@ func (p *plugin) sendRevenue(parent context.Context, c *Config, data clickData, 
 	// A stable reconciliation identifier; don't assume upstream deduplication.
 	q.Set("transaction_id", data.ClickID)
 	q.Set("order_id", conversion.LeadID)
-	return p.deliver(ctx, "https://api.appmetrica.yandex.ru/logs/v1/import/revenue", q)
+	return p.deliver(ctx, appmetrica.RevenueURL, q)
 }
 
 // Match the client event dimensions without exposing signed bearer contexts.

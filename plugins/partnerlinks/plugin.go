@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/NikitaVasin/pocket_mfo/plugins/dynamiclink"
 	"github.com/NikitaVasin/pocket_mfo/plugins/polymorphicrelation"
 	"github.com/pocketbase/pocketbase/apis"
@@ -32,9 +34,20 @@ func Register(app core.App, options Options) {
 }
 
 func register(app core.App, options Options, client *http.Client) {
+	adminui.Register(app)
+	dynamiclink.RegisterDefaultCategory(app, "offers", "Офферы")
 	polymorphicrelation.Register(app, polymorphicrelation.Options{SystemCollections: []string{ConversationsCollection}})
 	options.AuthCollections = slices.Clone(options.AuthCollections)
 	setManaged(app, options.Managed)
+	appmetrica.RegisterLegacySource(app, "partnerlinks", func(a core.App) (appmetrica.Config, error) {
+		c, err := loadStored(a)
+		if err != nil {
+			return appmetrica.Config{}, err
+		}
+		overlayManaged(c, managed(a))
+		return appmetrica.Config{ApplicationID: c.ApplicationID, PostAPIKey: c.PostAPIKey, EventNames: c.EventNames}, nil
+	})
+
 	app.Store().Set(adminLockStoreKey, options.LockAdminConfig)
 	p := &plugin{options: options, client: client}
 	app.OnBootstrap().Bind(&hook.Handler[*core.BootstrapEvent]{Id: "partnerlinks", Func: func(e *core.BootstrapEvent) error {
@@ -43,6 +56,9 @@ func register(app core.App, options Options, client *http.Client) {
 		}
 		return e.App.RunInTransaction(func(tx core.App) error {
 			if err := install(tx); err != nil {
+				return err
+			}
+			if err := ensureProviderSecrets(tx); err != nil {
 				return err
 			}
 			return validateManaged(tx)
@@ -121,7 +137,12 @@ func register(app core.App, options Options, client *http.Client) {
 		return e.Next()
 	}})
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{Id: "partnerlinks", Func: func(e *core.ServeEvent) error {
-		if err := validateManaged(e.App); err != nil {
+		if err := e.App.RunInTransaction(func(tx core.App) error {
+			if err := ensureProviderSecrets(tx); err != nil {
+				return err
+			}
+			return validateManaged(tx)
+		}); err != nil {
 			return err
 		}
 		if err := installConversations(e.App, options.AuthCollections); err != nil {
@@ -184,7 +205,7 @@ func register(app core.App, options Options, client *http.Client) {
 			if err := decodeBody(r, &c); err != nil {
 				return r.BadRequestError("Некорректные настройки", nil)
 			}
-			result, err := Configure(r.App, c.Config)
+			result, err := configure(r.App, c.Config, true)
 			if err != nil {
 				return r.BadRequestError(err.Error(), nil)
 			}

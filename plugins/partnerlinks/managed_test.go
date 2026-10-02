@@ -91,9 +91,11 @@ func TestManagedSettings(t *testing.T) {
 	view = adminSettings(x.app, *c)
 	b, _ := json.Marshal(view)
 	w = x.request("PUT", "/api/partnerlinks/admin/config", x.admin, string(b), "application/json")
-	if w.Code != 200 {
-		t.Fatalf("editable fields rejected: %s", w.Body)
+	if w.Code != 400 {
+		t.Fatalf("structural HTTP edit accepted: %s", w.Body)
 	}
+	_, err = Configure(x.app, *c)
+	must(t, err)
 	raw, err := loadStored(x.app)
 	must(t, err)
 	b, _ = json.Marshal(raw)
@@ -256,5 +258,42 @@ func TestOnlyManagedProvidersCanBeRemovedFromCode(t *testing.T) {
 	must(t, err)
 	if c.Providers == nil || len(c.Providers) != 0 {
 		t.Fatal("admin API must expose an empty array after removing code providers")
+	}
+}
+
+func TestIncompleteCodePresetStoresOnlyCredentials(t *testing.T) {
+	x := setup(t, false)
+	setManaged(x.app, &ManagedConfig{Providers: []Provider{RafinadNew("missing", "")}})
+	must(t, validateManaged(x.app))
+	c, err := Load(x.app)
+	must(t, err)
+	if configurationReadiness(*c).Ready {
+		t.Fatal("missing secret reported ready")
+	}
+	p, err := provider(c, "missing")
+	must(t, err)
+	p.Secret = "editable-secret-12345"
+	view := adminSettings(x.app, *c)
+	b, _ := json.Marshal(view.Config)
+	w := x.request("PUT", "/api/partnerlinks/admin/config", x.admin, string(b), "application/json")
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	c, err = Load(x.app)
+	must(t, err)
+	p, err = provider(c, "missing")
+	must(t, err)
+	if p.Secret != "editable-secret-12345" {
+		t.Fatal("credential lost")
+	}
+	setManaged(x.app, nil)
+	c, err = Load(x.app)
+	must(t, err)
+	if _, err = provider(c, "missing"); err == nil {
+		t.Fatal("code definition persisted")
+	}
+	w = x.request("GET", "/api/partnerlinks/admin/config", x.admin, "", "")
+	if strings.Contains(w.Body.String(), "editable-secret-12345") {
+		t.Fatal("sidecar credential leaked")
 	}
 }

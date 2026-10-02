@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -58,6 +59,7 @@ type Server struct {
 }
 
 func Register(app core.App, opts Options) *Server {
+	adminui.Register(app)
 	s := &Server{app: app, opts: Options{slices.Clone(opts.ContentCollections), slices.Clone(opts.AllowedOrigins)}, tools: map[string]Tool{}}
 	_ = s.Use(contentProvider{s})
 	app.OnBootstrap().Bind(&hook.Handler[*core.BootstrapEvent]{Id: "mcp", Func: func(e *core.BootstrapEvent) error {

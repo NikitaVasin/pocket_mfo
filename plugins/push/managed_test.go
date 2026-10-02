@@ -93,9 +93,11 @@ func TestManagedSettingsPermissionsAndRedaction(t *testing.T) {
 	must(t, err)
 	c.OAuthToken, c.SendRate = "", 1200
 	response := x.request("PUT", "/api/push/admin/config", x.admin, c)
-	if response.Code != 200 {
-		t.Fatal(response.Body.String())
+	if response.Code != 400 {
+		t.Fatal("HTTP default rate edit accepted")
 	}
+	_, err = Configure(x.app, c)
+	must(t, err)
 	raw, err := loadStored(x.app)
 	must(t, err)
 	if raw.SendRate != 1200 || raw.OAuthToken != "server-only-token" {

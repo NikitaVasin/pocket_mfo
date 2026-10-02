@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/internal/adminui"
 	"github.com/pocketbase/dbx"
 	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/apis"
@@ -59,6 +60,7 @@ func (e *ConflictError) Error() string {
 
 // Register is idempotent and must run before Bootstrap/Start.
 func Register(app core.App) {
+	adminui.Register(app)
 	app.OnBootstrap().Bind(&hook.Handler[*core.BootstrapEvent]{Id: "singleton", Func: func(e *core.BootstrapEvent) error {
 		if err := e.Next(); err != nil {
 			return err

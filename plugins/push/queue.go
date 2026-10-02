@@ -89,7 +89,11 @@ func (p *Plugin) Launch(app core.App, in Launch) (map[string]any, error) {
 			return err
 		}
 		r := core.NewRecord(coll)
-		d := runDefinition{Campaign: c, Audiences: a, ApplicationID: cfg.ApplicationID, SendRate: cfg.SendRate, OpenToken: secret(), InputHash: fingerprint, Test: len(in.TestDeviceIDs) > 0, TestDeviceIDs: in.TestDeviceIDs}
+		rate := cfg.SendRate
+		if c.SendRate != 0 {
+			rate = c.SendRate
+		}
+		d := runDefinition{Campaign: c, Audiences: a, ApplicationID: cfg.ApplicationID, SendRate: rate, OpenToken: secret(), InputHash: fingerprint, Test: len(in.TestDeviceIDs) > 0, TestDeviceIDs: in.TestDeviceIDs}
 		r.Set("campaignId", c.ID)
 		r.Set("name", c.Name)
 		r.Set("requestKey", in.IdempotencyKey)
@@ -335,10 +339,10 @@ func (p *Plugin) processJob(ctx context.Context, id string) error {
 			transfer, err := p.sendBatch(ctx, cfg, d, run.Id, job)
 			if err != nil {
 				var remote *remoteError
-				if errors.As(err, &remote) && remote.status == 429 {
+				if errors.As(err, &remote) && remote.Status == 429 {
 					job.Set("status", "queued")
 				}
-				if errors.As(err, &remote) && remote.status >= 400 && remote.status < 500 && remote.status != 429 && remote.status != 408 {
+				if errors.As(err, &remote) && remote.Status >= 400 && remote.Status < 500 && remote.Status != 429 && remote.Status != 408 {
 					job.Set("status", "failed")
 				}
 				message := "Отправка не подтверждена; проверяем статус без повторной отправки. "

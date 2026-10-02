@@ -47,6 +47,9 @@ func ensureDemoPartnerService(app core.App) error {
 		if _, err = partnerlinks.Configure(tx, *cfg); err != nil {
 			return err
 		}
+		if os.Getenv("DEMO_PARTNER_ENABLED") != "1" {
+			return nil
+		}
 		row, err := tx.FindRecordById(partnerlinks.LinksCollection, "demopartner0001")
 		if err != nil {
 			return err

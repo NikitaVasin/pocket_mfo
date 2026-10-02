@@ -47,11 +47,17 @@ func ensureDemoTypedConfigs(app core.App) error {
 		r := core.NewRecord(c)
 		r.Id = "demohomeconfig1"
 		r.Set("title", "Главная витрина")
-		r.Set("items", []typedconfig.Item{
+		items := []typedconfig.Item{
 			{ID: "welcome", Type: "heading", Data: map[string]any{"text": "Подберите подходящее предложение", "style": map[string]any{"layout": "Карточки", "compact": false}}},
-			{ID: "featured", Type: "offerCard", Data: map[string]any{"offer": map[string]any{"id": "demopartner0001"}, "badge": "Рекомендуем"}},
 			{ID: "help", Type: "faq", Data: map[string]any{"entries": []any{map[string]any{"question": "Как выбрать предложение?", "answer": "Сравните условия и откройте карточку."}}}},
-		})
+		}
+		if _, err := tx.FindRecordById(source, "demopartner0001"); err == nil {
+			featured := typedconfig.Item{ID: "featured", Type: "offerCard", Data: map[string]any{"offer": map[string]any{"id": "demopartner0001"}, "badge": "Рекомендуем"}}
+			items = append(items[:1], append([]typedconfig.Item{featured}, items[1:]...)...)
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		r.Set("items", items)
 		return tx.Save(r)
 	})
 }

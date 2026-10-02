@@ -62,6 +62,7 @@ test("dedicated link pages hide collections without removing record access", asy
     for (const theme of ["light", "dark"]) {
         await page.evaluate(theme => app.store.userColorScheme = theme, theme);
         await expect(sidebar.locator('[title="partner_links"]')).toBeHidden();
+        await expect(sidebar.locator('[title="conversations"]')).toBeHidden();
         await expect(sidebar.locator('[title="dynamic_link_settings"]')).toBeHidden();
         await expect(sidebar.locator('[title="demo_offers"]')).toBeVisible();
         await sidebar.screenshot({ path: `test-results/link-sidebar-${testInfo.project.name}-${theme}.png` });
@@ -149,134 +150,27 @@ test("Collections leaves a service collection opened by an old URL", async ({ pa
     }
 });
 
-test("partner settings use native top navigation and profile field selector", async ({ page }, testInfo) => {
-    const errors = [], recordRequests = [];
-    page.on("pageerror", error => errors.push(error.message));
-    page.on("request", request => { if (request.url().includes("/api/collections/partner_links/records")) recordRequests.push(request.url()); });
-    await page.goto("/_/");
-    await page.waitForFunction(() => window.app?.store?._ready);
-    await page.evaluate(async () => {
-        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
-        await app.store.loadCollections();
-        location.hash = "#/settings";
-    });
-    await expect(page.getByLabel("Application name", { exact: true })).toBeVisible();
-    const icons = await page.locator('.settings-sidebar .nav-item i').evaluateAll(els => els.map(el => el.className));
-    expect(icons.length).toBeGreaterThan(3);
-    await page.getByRole("link", { name: "Партнёрские ссылки", exact: true }).click();
+test("partner settings hide code definitions and use shared AppMetrica", async ({ page }, testInfo) => {
+    const errors = []; page.on("pageerror", e => errors.push(e.message));
+    await page.goto("/_/"); await page.waitForFunction(() => window.app?.store?._ready);
+    await page.evaluate(async () => { await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123"); location.hash = "#/partner-links?tab=settings"; });
     const settings = page.locator('[data-pb="pagePartnerLinks"]');
-    await expect(settings.getByRole("button", { name: "Добавить ссылку", exact: true })).toBeVisible();
-    await expect(settings.getByRole("heading", { name: "AppMetrica", exact: true })).toHaveCount(0);
-    await settings.getByRole("link", { name: "Настройки", exact: true }).click();
-    await expect(settings.getByRole("heading", { name: "AppMetrica", exact: true })).toBeVisible();
-    await expect(page.locator('.settings-sidebar')).toHaveCount(0);
-    await expect(page.locator('.app-main-nav .header-link.active')).toHaveText("Партнёрские ссылки");
-    await expect(settings.getByRole("button", { name: "Добавить ссылку", exact: true })).toHaveCount(0);
+    await expect(settings.getByRole("heading", { name: "Готовность подключения" })).toBeVisible();
+    for (const label of ["Application ID", "Post API key", "Срок открытия ссылки, секунд", "Название провайдера", "Шаблон ссылки"]) await expect(settings.getByLabel(label, { exact: true })).toHaveCount(0);
+    await expect(settings.getByRole("button", { name: "Добавить провайдера" })).toHaveCount(0);
+    await expect(settings.getByRole("link", { name: "Настройки и проверка AppMetrica →" })).toBeVisible();
     if (testInfo.project.name === "schemalock") {
-        await expect(settings.getByLabel("Application ID", { exact: true })).toBeDisabled();
-        await expect(settings.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeDisabled();
-        await expect(settings.getByRole("button", { name: "Добавить провайдера", exact: true })).toBeDisabled();
-        const provider = settings.locator(".pl-provider").first();
-        await provider.locator(":scope > summary").click();
-        await expect(provider.getByLabel("Название провайдера", { exact: true })).toBeDisabled();
-        const status = await page.evaluate(async () => {
-            const config = await app.pb.send("/api/partnerlinks/admin/config");
-            try { await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: { ...config, applicationId: 999, locks: { all: false } } }); return 200; }
-            catch (error) { return error.status; }
-        });
-        expect(status).toBe(403);
-        for (const theme of ["light", "dark"]) {
-            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
-            await settings.screenshot({ path: `test-results/partner-settings-locked-${theme}.png` });
-        }
-        expect(errors).toEqual([]);
-        return;
+        await expect(settings.getByLabel("Публичный URL сервера")).toHaveCount(0);
+        await expect(settings.getByRole("button", { name: "Сохранить настройки" })).toHaveCount(0);
+    } else {
+        const field = settings.getByLabel("Публичный URL сервера"); await expect(field).toBeVisible();
+        const original = await field.inputValue(); await field.fill("https://updated.example.test");
+        await settings.getByRole("button", { name: "Сохранить настройки" }).click();
+        await expect(settings.getByText("Настройки сохранены.", { exact: true })).toBeVisible();
+        await page.reload(); await expect(field).toHaveValue("https://updated.example.test");
+        await field.fill(original); await settings.getByRole("button", { name: "Сохранить настройки" }).click();
     }
-    await settings.getByLabel("Публичный URL сервера", { exact: true }).fill("https://links.example.test");
-    await settings.getByLabel("Application ID", { exact: true }).fill("1234");
-    await expect(settings.getByLabel("Без заявки: хранить дней", { exact: true })).toHaveValue("14");
-    await expect(settings.getByLabel("С заявкой: хранить дней", { exact: true })).toHaveValue("0");
-    await settings.getByLabel("Без заявки: хранить дней", { exact: true }).fill("21");
-    await settings.getByLabel("С заявкой: хранить дней", { exact: true }).fill("90");
-    await settings.getByLabel("Post API key", { exact: true }).fill("browser-fake-appmetrica-key");
-    await settings.getByRole("button", { name: "Добавить провайдера", exact: true }).click();
-    const provider = settings.locator('.pl-provider').last();
-    const id = `browser-${Date.now()}`;
-    await provider.getByLabel("Название провайдера", { exact: true }).fill("Тестовый партнёр");
-    await provider.getByLabel("ID провайдера", { exact: true }).fill(id);
-    await expect(provider.getByLabel("Когда начислять Revenue", { exact: true })).toContainText('Подтверждение (апрув)');
-    await provider.getByLabel("Передавать доход в Revenue", { exact: true }).check();
-    await selectChoice(provider.getByLabel("Когда начислять Revenue", { exact: true }), 'Холд / ожидание');
-    await provider.getByLabel("Сумма", { exact: true }).fill("payout");
-    await provider.getByLabel("Валюта", { exact: true }).fill("currency");
-    await expect(provider.locator('.pl-revenue')).toContainText("offer_click → offer_lead → offer_hold");
-    await provider.getByLabel("Секрет постбека", { exact: true }).fill("browser-provider-secret-123");
-    await selectChoice(provider.getByLabel("Где передавать секрет", { exact: true }), 'Тело запроса (POST JSON / form)');
-    await provider.getByLabel("Имя параметра / заголовка секрета", { exact: true }).fill("auth.secret");
-    const rows = provider.locator('.pl-status-mapping .pl-mapping-row');
-    await rows.first().getByLabel("Статус партнёра", { exact: true }).fill("1");
-    await selectChoice(rows.first().getByLabel("Значение статуса", { exact: true }), 'Подтверждение');
-    await expect(rows.first()).toContainText("offer_approved");
-    await provider.getByRole("button", { name: "Добавить параметр", exact: true }).click();
-    await provider.getByLabel("Имя параметра в конверсии", { exact: true }).fill("offerId");
-    await provider.getByLabel("Поле партнёра", { exact: true }).fill("data.offer_id");
-    await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
-    await expect(settings.locator('.alert[role="status"]')).toHaveText("Настройки сохранены.");
-    const cfg = await page.evaluate(() => app.pb.send("/api/partnerlinks/admin/config"));
-    expect(cfg).toMatchObject({ pendingRetentionDays: 21, conversionRetentionDays: 90 });
-    expect(cfg.hasPostApiKey && !cfg.postApiKey && cfg.providers.every(p => p.hasSecret && p.secret)).toBe(true);
-    expect(cfg.providers.at(-1)).toMatchObject({ sendRevenue: true, revenueStatus: "hold", secretLocation: "body", secretName: "auth.secret", statuses: { "1": "approved" }, extraFields: { offerId: "data.offer_id" } });
-    await provider.locator(':scope > summary').click(); // may already be expanded after save
-    if (!(await provider.evaluate(el => el.open))) await provider.locator(':scope > summary').click();
-    await provider.getByRole("button", { name: "Добавить соответствие", exact: true }).click();
-    await rows.last().getByLabel("Статус партнёра", { exact: true }).fill("1");
-    await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
-    await expect(settings.getByRole("alert")).toContainText("повторяется");
-    await rows.last().getByRole("button", { name: /^Удалить соответствие/ }).click();
-    await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
-    await expect(settings.locator('.alert[role="status"]')).toHaveText("Настройки сохранены.");
-    await provider.locator('.pl-examples > summary').click();
-    await expect(provider.locator('.pl-examples')).toContainText('"auth": {"secret": "YOUR_SECRET"}');
-    for (const width of [1280, 390]) {
-        await page.setViewportSize({ width, height: 900 });
-        for (const theme of ["light", "dark"]) {
-            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
-            expect(await settings.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-            const overlaps = await provider.evaluate(el => {
-                const groups = [el.querySelector('.pl-provider-body'), ...el.querySelectorAll('.pl-mapping-list')];
-                return groups.flatMap(group => [...group.children].slice(1).filter((child, i) => child.getBoundingClientRect().top < group.children[i].getBoundingClientRect().bottom - 1).map(child => child.className));
-            });
-            expect(overlaps).toEqual([]);
-            const controls = await rows.first().evaluate(row => {
-                const rect = el => { const r = el.getBoundingClientRect(); return { top: r.top, height: r.height }; };
-                return [...row.querySelectorAll('input, select, button')].filter(el => el.checkVisibility()).map(rect);
-            });
-            expect(controls.map(c => c.height)).toEqual([44, 44, 44]);
-            if (width > 600) expect(new Set(controls.map(c => c.top)).size).toBe(1);
-            await provider.locator('.pl-status-mapping').screenshot({ path: `test-results/statuses-${testInfo.project.name}-${theme}-${width}.png`, animations: "disabled" });
-            await provider.locator('.pl-status-mapping').scrollIntoViewIfNeeded();
-            await provider.locator('.pl-revenue').screenshot({ path: `test-results/revenue-${testInfo.project.name}-${theme}-${width}.png`, animations: "disabled" });
-            await page.screenshot({ path: `test-results/partnerlinks-${testInfo.project.name}-${theme}-${width}.png`, fullPage: true, animations: "disabled" });
-        }
-    }
-    await page.reload(); // direct opening on a narrow viewport preserves the native toggle
-    await expect(settings.getByRole("heading", { name: "AppMetrica", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Партнёрские ссылки", exact: true })).toBeVisible();
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.reload();
-    await expect(settings.getByLabel("Без заявки: хранить дней", { exact: true })).toHaveValue("21");
-    await expect(settings.getByLabel("С заявкой: хранить дней", { exact: true })).toHaveValue("90");
-    await provider.locator(':scope > summary').click();
-    await expect(provider.getByLabel("Когда начислять Revenue", { exact: true })).toContainText('Холд / ожидание');
-    await expect(provider.getByLabel("Передавать доход в Revenue", { exact: true })).toBeChecked();
-    await page.getByRole("link", { name: "Settings", exact: true }).click();
-    await expect(page.getByLabel("Application name", { exact: true })).toBeVisible();
-    await expect(settings).toHaveCount(0);
-    expect(await page.locator('.settings-sidebar .nav-item i').evaluateAll(els => els.map(el => el.className))).toEqual(icons);
-    await page.evaluate(() => location.hash = "#/settings/partner-links");
-    await expect(settings.getByRole("heading", { name: "AppMetrica", exact: true })).toBeVisible();
-    await expect(page.locator('.app-main-nav .header-link.active')).toHaveText("Партнёрские ссылки");
-    expect(recordRequests.length).toBeGreaterThan(0);
+    for (const theme of ["light", "dark"]) { await page.evaluate(theme => app.store.userColorScheme = theme, theme); await settings.screenshot({ path: testInfo.outputPath(`partner-settings-${theme}.png`) }); }
     expect(errors).toEqual([]);
 });
 
@@ -358,6 +252,14 @@ test("global dynamic link policy uses native Singleton and Variants in both them
     const form = page.locator('.ps-record-form');
     await expect(form).toBeVisible();
     await expect(form.locator(".json-editor, .cm-editor")).toHaveCount(0);
+    for (const theme of ["light", "dark"]) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        await form.getByRole("tab", { name: "Офферы", exact: true }).click();
+        await expect(form.getByLabel("Код категории", { exact: true })).toHaveValue("offers");
+        await expect(form.getByLabel("Название категории", { exact: true })).toHaveValue("Офферы");
+        await expect(form.getByLabel("Режим открытия категории", { exact: true })).toContainText("Общий режим");
+        await form.locator(".dl-category").screenshot({ path: `test-results/default-offers-${testInfo.project.name}-${theme}.png` });
+    }
     await form.getByRole("button", { name: "Добавить категорию", exact: true }).click();
     const category = form.locator(".dl-category").last();
     await category.getByLabel("Название категории", { exact: true }).pressSequentially("Партнёры");
@@ -452,6 +354,83 @@ test("global dynamic link policy uses native Singleton and Variants in both them
     }
 });
 
+test("conversion cards support search, status, pagination and read-only preview", async ({ page }, testInfo) => {
+    const errors = []; page.on("pageerror", error => errors.push(error.message));
+    await page.goto("/_/");
+    await page.waitForFunction(() => window.app?.store?._ready);
+    const fixture = await page.evaluate(async () => {
+        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
+        const user = new app.pb.constructor(app.pb.baseURL);
+        await user.collection("users").authWithPassword("default@variants.test", "demo-variants-123");
+        const link = await user.collection("partner_links").getFirstListItem('provider = "demo"');
+        let issued;
+        for (let i = 0; i < 25; i++) issued = await user.send(`/api/partnerlinks/links/${link.id}/resolve`, { method: "POST", body: {} });
+        const row = await user.collection("conversations").getFirstListItem(`clickId = "${issued.clickId}"`);
+        await app.store.loadCollections();
+        location.hash = "#/partner-links";
+        return { id: row.id, userId: row.userId, name: link.name };
+    });
+    await page.getByRole("link", { name: "Конверсии", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Конверсии", exact: true })).toHaveAttribute("aria-current", "page");
+    const section = page.getByRole("region", { name: "Конверсии", exact: true });
+    const cards = section.locator(".pl-conversion-card");
+    await expect(cards).toHaveCount(24);
+    await section.getByRole("button", { name: "Далее", exact: true }).click();
+    await expect(section.locator(".pl-link-pagination")).toContainText("2 /");
+    await expect(cards.first()).toBeVisible();
+    await section.getByLabel("Поиск конверсий").fill(fixture.id);
+    await expect(cards).toHaveCount(1);
+    await expect(cards.first()).toContainText(fixture.name);
+    await expect(cards.first()).toContainText("Ожидает конверсии");
+    await expect(section.locator(".pl-link-pagination")).toContainText("1 / 1");
+    for (const theme of ["light", "dark"]) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        for (const width of [1280, 390]) {
+            await page.setViewportSize({ width, height: 900 });
+            expect(await section.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await section.screenshot({ path: `test-results/conversion-cards-${testInfo.project.name}-${theme}-${width}.png` });
+        }
+        await cards.first().click();
+        const preview = page.locator(".record-preview-modal");
+        await expect(preview).toBeVisible();
+        await expect(preview).toContainText(fixture.id);
+        await expect(page.locator(".record-upsert-modal")).toHaveCount(0);
+        await expect(preview.getByRole("button", { name: /^(Save|Delete|Duplicate)$/ })).toHaveCount(0);
+        await page.keyboard.press("Escape");
+        await expect(preview).toHaveCount(0);
+    }
+    await selectChoice(section.locator(".select"), "Одобрена");
+    await expect(section.getByText("По выбранным условиям конверсий не найдено.")).toBeVisible();
+    await expect(cards).toHaveCount(0);
+    await selectChoice(section.locator(".select"), "Все статусы");
+    await expect(cards).toHaveCount(1);
+    await section.getByLabel("Поиск конверсий").fill('" || id != "');
+    await expect(section.getByText("По выбранным условиям конверсий не найдено.")).toBeVisible();
+    await section.getByLabel("Поиск конверсий").fill(fixture.userId);
+    await expect(cards).toHaveCount(24);
+    const fail = route => route.fulfill({ status: 500, json: { message: "Тестовая ошибка загрузки" } });
+    await page.route("**/api/collections/conversations/records?**", fail);
+    await section.getByRole("button", { name: "Обновить", exact: true }).click();
+    await expect(section.getByRole("alert")).toContainText("Тестовая ошибка загрузки");
+    await expect(cards.first()).toBeHidden();
+    await page.unroute("**/api/collections/conversations/records?**", fail);
+    await section.getByRole("button", { name: "Повторить", exact: true }).click();
+    await expect(cards.first()).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Конверсии", exact: true })).toBeVisible();
+    await expect(cards.first()).toBeVisible();
+    // The native Collections link must not restore the hidden service collection.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => {
+        app.store.activeCollection = "conversations";
+        localStorage.setItem("pbLastActiveCollection", "conversations");
+    });
+    await page.getByRole("link", { name: "Collections", exact: true }).click();
+    await expect(page.locator(".collections-sidebar")).toBeVisible();
+    expect(await page.evaluate(() => app.store.activeCollection.name)).not.toBe("conversations");
+    expect(errors).toEqual([]);
+});
+
 test("conversations expose only native record preview and no Variants", async ({ page }, testInfo) => {
     await page.goto('/_/');
     await page.waitForFunction(() => window.app?.store?._ready);
@@ -535,11 +514,7 @@ test("provider selector loads configured names, searches and saves IDs", async (
         await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
         await app.store.loadCollections();
         const config = await app.pb.send("/api/partnerlinks/admin/config");
-        const providerId = locked ? "browser-selector" : "selector-" + Date.now();
-        if (!locked) {
-            config.providers.push({ ...config.providers.find(p => p.id === "demo"), id: providerId, name: "Другой партнёр", secret: "selector-test-secret-123" });
-            await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: config });
-        }
+        const providerId = "browser-selector";
         const demo = await app.pb.collection("partner_links").getOne("demopartner0001");
         const record = await app.pb.collection("partner_links").create({ name: "Provider selector", provider: "demo", active: true, link: demo.link });
         location.hash = "#/collections?collection=" + record.collectionId;
@@ -567,23 +542,12 @@ test("provider selector loads configured names, searches and saves IDs", async (
         await page.getByRole("button", { name: "Save changes", exact: true }).click();
         await expect(field).toHaveCount(0);
         expect(await page.evaluate(async id => (await app.pb.collection("partner_links").getOne(id)).provider, fixture.recordId)).toBe(fixture.providerId);
-        if (!fixture.locked) {
-        await page.evaluate(async id => {
-            const config = await app.pb.send("/api/partnerlinks/admin/config");
-            config.providers.find(p => p.id === id).name = "Обновлённый партнёр";
-            await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: config });
-        }, fixture.providerId);
         await open();
-        await expect(field.locator('.selected-container')).toHaveText("Обновлённый партнёр (" + fixture.providerId + ")");
-        }
+        await expect(field.locator('.selected-container')).toHaveText("Другой партнёр (" + fixture.providerId + ")");
         expect(errors).toEqual([]);
     } finally {
         await page.evaluate(async ({ recordId, providerId, locked }) => {
             await app.pb.collection("partner_links").delete(recordId);
-            if (locked) return;
-            const config = await app.pb.send("/api/partnerlinks/admin/config");
-            config.providers = config.providers.filter(p => p.id !== providerId);
-            await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: config });
         }, fixture);
     }
 });
@@ -618,91 +582,73 @@ test("provider selector explains empty configuration and retries loading errors"
     await expect(field.locator('.selected-container')).toBeDisabled();
 });
 
-test("Rafinad preset supplies visible secret, mappings and setup guide", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name === "schemalock", "Schema Lock prohibits provider editing; readonly settings are tested separately.");
-    const errors = [];
-    page.on("pageerror", error => errors.push(error.message));
-    await page.goto("/_/");
-    await page.waitForFunction(() => window.app?.store?._ready);
-    await page.evaluate(async () => {
+test("only code-defined Rafinad preset exists and structural HTTP edits fail", async ({ page }, testInfo) => {
+    await page.goto("/_/"); await page.waitForFunction(() => window.app?.store?._ready);
+    const result = await page.evaluate(async () => {
         await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
-        location.hash = "#/partner-links?tab=settings";
-    });
-    const settings = page.locator('[data-pb="pagePartnerLinks"]');
-    await settings.getByRole("button", { name: "Добавить провайдера", exact: true }).click();
-    const provider = settings.locator('.pl-provider').last();
-    const id = `rafinad-${Date.now()}`;
-    await provider.getByLabel("ID провайдера", { exact: true }).fill(id);
-    await selectChoice(provider.getByLabel("Пресет партнёра", { exact: true }), 'Rafinad New');
-    await expect(provider.getByLabel("Название провайдера", { exact: true })).toHaveValue("Rafinad New");
-    await expect(provider.getByLabel("ID провайдера", { exact: true })).toHaveValue(id);
-    await expect(provider.getByLabel("Шаблон ссылки", { exact: true })).toHaveValue("{url}?p_click_id={clickData}");
-    const secret = provider.getByLabel("Секрет постбека", { exact: true });
-    await expect(secret).toHaveAttribute("type", "text");
-    const value = await secret.inputValue();
-    expect(value).toMatch(/^[0-9a-f]{48}$/);
-    await expect(provider.locator('.pl-preset-guide')).toContainText(value);
-    await expect(provider.locator('.pl-preset-guide')).toContainText(`/api/partnerlinks/postbacks/${id}`);
-    await expect(provider.locator('.pl-preset-table')).toContainText("{publisher_commission}");
-    await expect(provider.locator('.pl-preset-guide')).toContainText("Одобрено = 4");
-    await expect(provider.getByLabel("Передавать доход в Revenue", { exact: true })).not.toBeChecked();
-    await settings.getByRole("button", { name: "Сохранить настройки", exact: true }).click();
-    await expect(settings.locator('.alert[role="status"]')).toHaveText("Настройки сохранены.");
-    await page.reload();
-    await provider.locator(':scope > summary').click();
-    await expect(secret).toHaveValue(value);
-    const config = await page.evaluate(() => app.pb.send("/api/partnerlinks/admin/config"));
-    expect(config.providers.at(-1)).toMatchObject({ preset: "rafinad_new", id, statuses: { "1": "lead", "2": "hold", "3": "rejected", "4": "approved" } });
-    for (const width of [1280, 390]) {
-        await page.setViewportSize({ width, height: 900 });
-        for (const theme of ["light", "dark"]) {
-            await page.evaluate(theme => app.store.userColorScheme = theme, theme);
-            expect(await settings.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-            await provider.locator('.pl-preset-guide').screenshot({ path: `test-results/rafinad-${testInfo.project.name}-${theme}-${width}.png`, animations: "disabled" });
+        const config = await app.pb.send("/api/partnerlinks/admin/config");
+        const preset = config.providers.find(p => p.id === "rafinad-new");
+        const statuses = [];
+        for (const mutate of [c => c.providers.push({ ...preset, id: "dynamic" }), c => c.providers.find(p => p.id === "rafinad-new").urlTemplate = "{url}?custom={clickData}", c => c.openTtlSeconds++]) {
+            const copy = JSON.parse(JSON.stringify(config)); mutate(copy);
+            try { await app.pb.send("/api/partnerlinks/admin/config", { method: "PUT", body: copy, requestKey: null }); statuses.push(200); } catch (e) { statuses.push(e.status); }
         }
-    }
-    await provider.getByLabel("clickData", { exact: true }).fill("custom_token");
-    await expect(provider.locator('.pl-preset-guide')).toContainText("Поля пресета изменены");
-    expect(errors).toEqual([]);
+        location.hash = "#/partner-links?tab=settings";
+        return { preset, statuses, after: await app.pb.send("/api/partnerlinks/admin/config"), before: config.version };
+    });
+    expect(result.preset).toMatchObject({ preset: "rafinad_new", name: "Rafinad New" });
+    expect(result.statuses).toEqual([1,2,3].map(() => testInfo.project.name === "schemalock" ? 403 : 400));
+    expect(result.after.version).toBe(result.before);
+    await expect(page.getByLabel("Шаблон ссылки", { exact: true })).toHaveCount(0);
 });
 
-test("managed settings and full admin lock disable editing but keep guide readable", async ({ page }) => {
-    let fullLock = false;
+test("fully configured partner settings show status without code-owned inputs", async ({ page }) => {
     await page.route('**/api/partnerlinks/admin/config', async route => {
-        const response = await route.fetch();
-        const config = await response.json();
-        const preset = config.presets.find(p => p.id === "rafinad_new");
-        config.providers = [{ ...preset.provider, id: "code-rafinad", secret: "code-partner-visible-secret" }];
-        config.locks = { all: fullLock, fields: ["applicationId", "postApiKey"], eventNames: ["lead"], providers: ["code-rafinad"] };
+        const response = await route.fetch(); const config = await response.json();
+        config.locks = { all: true, fields: [], providerSecrets: [] }; config.readiness = { ready: true, missing: [] };
         await route.fulfill({ response, json: config });
     });
-    await page.goto("/_/");
-    await page.waitForFunction(() => window.app?.store?._ready);
-    await page.evaluate(async () => {
-        await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123");
-        location.hash = "#/partner-links?tab=settings";
-    });
+    await page.goto("/_/"); await page.waitForFunction(() => window.app?.store?._ready);
+    await page.evaluate(async () => { await app.pb.collection("_superusers").authWithPassword("browser@example.test", "browser-test-password-123"); location.hash = "#/partner-links?tab=settings"; });
     const settings = page.locator('[data-pb="pagePartnerLinks"]');
-    await expect(settings.getByLabel("Application ID", { exact: true })).toBeDisabled();
-    await expect(settings.getByLabel("Post API key", { exact: true })).toBeDisabled();
-    await expect(settings.getByLabel("Публичный URL сервера", { exact: true })).toBeEnabled();
-    await settings.getByText("Дополнительно: собственные имена событий", { exact: true }).click();
-    await expect(settings.getByLabel("Заявка создана (лид)", { exact: true })).toBeDisabled();
-    await expect(settings.getByLabel("Клик по офферу", { exact: true })).toBeEnabled();
-    const provider = settings.locator('.pl-provider');
-    await provider.locator(':scope > summary').click();
-    await expect(provider.getByLabel("Пресет партнёра", { exact: true })).toBeDisabled();
-    await expect(provider.getByLabel("Секрет постбека", { exact: true })).toHaveValue("code-partner-visible-secret");
-    await expect(provider.getByLabel("Секрет постбека", { exact: true })).toBeDisabled();
-    await expect(provider.getByRole("button", { name: "Убрать провайдера", exact: true })).toBeDisabled();
-    await expect(provider.locator('.pl-preset-guide')).toContainText("code-partner-visible-secret");
-    await expect(settings.getByRole("button", { name: "Добавить провайдера", exact: true })).toBeEnabled();
-    fullLock = true;
-    await page.reload();
-    await expect(settings.locator('.alert[role="status"]')).toContainText("только для просмотра");
-    await expect(settings.getByLabel("Публичный URL сервера", { exact: true })).toBeDisabled();
-    await expect(settings.getByRole("button", { name: "Добавить провайдера", exact: true })).toBeDisabled();
-    await expect(settings.getByRole("button", { name: "Сохранить настройки", exact: true })).toBeDisabled();
-    await provider.locator(':scope > summary').click();
-    await expect(provider.locator('.pl-preset-guide')).toBeVisible();
+    await expect(settings).toContainText("Все обязательные параметры заданы");
+    await expect(settings.locator('input')).toHaveCount(0);
+    await expect(settings.getByRole("button", { name: "Сохранить настройки" })).toHaveCount(0);
+});
+
+test("provider postback guides are collapsed and reflect configured parameters", async ({ page }, testInfo) => {
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto('/_/'); await page.waitForFunction(() => window.app?.store?._ready);
+    const config = await page.evaluate(async () => {
+        await app.pb.collection('_superusers').authWithPassword('browser@example.test', 'browser-test-password-123');
+        const config = await app.pb.send('/api/partnerlinks/admin/config');
+        location.hash = '#/partner-links?tab=settings';
+        return config;
+    });
+    const guides = page.locator('.pl-postback-guide');
+    await expect(guides).toHaveCount(config.providers.length);
+    for (const guide of await guides.all()) expect(await guide.evaluate(el => el.open)).toBe(false);
+    const guide = guides.filter({ has: page.locator('summary', { hasText: 'Rafinad New' }) });
+    await guide.locator('summary').focus(); await page.keyboard.press('Enter');
+    await expect(guide.getByRole('button', { name: 'Скопировать адрес' })).toBeVisible();
+    await expect(guide).toContainText('/api/partnerlinks/postbacks/rafinad-new');
+    for (const macro of ['{p_click_id}', '{status}', '{order_id}', '{publisher_commission}', '{currency}']) await expect(guide).toContainText(macro);
+    await expect(guide).toContainText('Произвольный тестовый токен не создаёт конверсию');
+    await expect(guide.locator('input, select, textarea')).toHaveCount(0);
+    const secret = config.providers.find(p => p.id === 'rafinad-new').secret;
+    expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    await expect(guide.locator('.pl-postback-secret code')).toHaveText(secret);
+    await expect(guide.getByRole('button', { name: 'Скопировать секрет' })).toBeVisible();
+    for (const theme of ['light', 'dark']) {
+        await page.evaluate(theme => app.store.userColorScheme = theme, theme);
+        for (const width of [1280, 375]) {
+            await page.setViewportSize({ width, height: 1000 });
+            expect(await guide.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await guide.locator('.pl-guide-table').first().scrollIntoViewIfNeeded();
+            await page.screenshot({ path: testInfo.outputPath(`postback-guide-${theme}-${width}.png`) });
+        }
+    }
+    await guide.locator('summary').click();
+    await expect(guide.getByRole('button', { name: 'Скопировать адрес' })).toBeHidden();
+    expect(errors).toEqual([]);
 });

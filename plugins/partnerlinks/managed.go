@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NikitaVasin/pocket_mfo/plugins/appmetrica"
 	"github.com/NikitaVasin/pocket_mfo/plugins/schemalock"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -69,7 +70,13 @@ func overlayManaged(c *Config, m *ManagedConfig) {
 	var providers []Provider
 	_ = json.Unmarshal(b, &providers)
 	for _, p := range providers {
+		if p.Secret == "" {
+			p.Secret = c.ProviderCredentials[p.ID]
+		}
 		if old, err := provider(c, p.ID); err == nil {
+			if p.Secret == "" {
+				p.Secret = old.Secret
+			}
 			*old = p
 		} else {
 			c.Providers = append(c.Providers, p)
@@ -96,7 +103,14 @@ func checkManaged(c, old *Config, m *ManagedConfig) error {
 	for _, p := range m.Providers {
 		current, err := provider(c, p.ID)
 		previous, _ := provider(old, p.ID)
-		if err != nil || !sameProvider(*current, *previous) {
+		if err != nil {
+			return fmt.Errorf("partnerlinks: provider %s is managed by Go code", p.ID)
+		}
+		a, b := *current, *previous
+		if p.Secret == "" {
+			a.Secret, b.Secret = "", ""
+		}
+		if !sameProvider(a, b) {
 			return fmt.Errorf("partnerlinks: provider %s is managed by Go code", p.ID)
 		}
 	}
@@ -151,24 +165,39 @@ func storedConfig(c Config, raw *Config, m *ManagedConfig) Config {
 			stored.Providers = append(stored.Providers, p)
 		}
 	}
+	stored.ProviderCredentials = map[string]string{}
+	for id, secret := range raw.ProviderCredentials {
+		stored.ProviderCredentials[id] = secret
+	}
+	for _, p := range m.Providers {
+		if p.Secret == "" {
+			value, _ := provider(&c, p.ID)
+			stored.ProviderCredentials[p.ID] = value.Secret
+		}
+	}
+
 	return stored
 }
 
 type configLocks struct {
-	All        bool     `json:"all"`
-	Fields     []string `json:"fields"`
-	EventNames []string `json:"eventNames"`
-	Providers  []string `json:"providers"`
+	All             bool     `json:"all"`
+	Fields          []string `json:"fields"`
+	EventNames      []string `json:"eventNames"`
+	Providers       []string `json:"providers"`
+	ProviderSecrets []string `json:"providerSecrets"`
 }
 
 type adminConfig struct {
+	SharedAppMetrica bool `json:"sharedAppMetrica"`
 	Config
-	Locks   configLocks      `json:"locks"`
-	Presets []ProviderPreset `json:"presets"`
+	Locks     configLocks      `json:"locks"`
+	Presets   []ProviderPreset `json:"presets"`
+	Readiness configReadiness  `json:"readiness"`
 }
 
 func adminSettings(app core.App, c Config) adminConfig {
-	result := adminConfig{Config: redacted(c), Presets: ProviderPresets()}
+	result := adminConfig{Config: redacted(c), Presets: ProviderPresets(), SharedAppMetrica: appmetrica.Enabled(app)}
+	result.Readiness = configurationReadiness(c)
 	result.Locks.All = adminConfigLocked(app)
 	if m := managed(app); m != nil {
 		for key := range managedScalars(m) {
@@ -179,6 +208,9 @@ func adminSettings(app core.App, c Config) adminConfig {
 		}
 		for _, p := range m.Providers {
 			result.Locks.Providers = append(result.Locks.Providers, p.ID)
+			if p.Secret != "" {
+				result.Locks.ProviderSecrets = append(result.Locks.ProviderSecrets, p.ID)
+			}
 		}
 	}
 	sort.Strings(result.Locks.Fields)
